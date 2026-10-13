@@ -13,10 +13,12 @@
 - First verify the real name of the video tool. Do not guess it.
 - Feed a clip to the renderer with `--background <path>`.
 
-## Phase 1b: TikTok Content Posting API
-- Upload as a DRAFT to the creator inbox. The human finishes and publishes.
-- The human registers a TikTok developer app.
+## Phase 1b: TikTok Content Posting API (built, untested against TikTok)
+- `npm run tiktok:auth` authorizes once (PKCE, scope `video.upload`).
+- `npm run tiktok:draft -- out/<file>.mp4` uploads a DRAFT to the creator inbox. The human finishes and publishes.
+- Setup: `docs/tiktok-setup.md`. The human registers a TikTok developer app.
 - Direct post needs an audit. Do not plan on it.
+- Open: first live run, chunked upload for files over 64 MB.
 
 ## Phase 1c: scheduled renders
 - A launchd job renders 1 to 3 videos a day.

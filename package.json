@@ -7,7 +7,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "studio": "remotion studio src/index.ts",
-    "render": "tsx scripts/render-track.ts"
+    "render": "tsx scripts/render-track.ts",
+    "tiktok:auth": "tsx scripts/tiktok-auth.ts",
+    "tiktok:draft": "tsx scripts/tiktok-upload-draft.ts"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.535",
