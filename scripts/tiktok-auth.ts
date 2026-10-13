@@ -7,9 +7,11 @@ import {execFile} from 'node:child_process';
 import {existsSync} from 'node:fs';
 import {randomBytes} from 'node:crypto';
 import {createServer, type Server, type ServerResponse} from 'node:http';
+import path from 'node:path';
+import {readTikTokCredentials} from '../src/tiktok/credentials';
 import {buildAuthorizeUrl, exchangeCode} from '../src/tiktok/oauth';
 import {createCodeVerifier, toCodeChallenge} from '../src/tiktok/pkce';
-import {createFileTokenStore} from '../src/tiktok/tokenStore';
+import {createFileTokenStore, DEFAULT_TOKEN_PATH} from '../src/tiktok/tokenStore';
 
 const DEFAULT_REDIRECT_URI = 'http://127.0.0.1:8723/callback/';
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000;
@@ -19,16 +21,13 @@ function exitWithError(message: string): never {
   process.exit(1);
 }
 
-function readEnv(): {clientKey: string; clientSecret: string; redirectUri: string} {
+function readEnv(): {clientKey: string; clientSecret: string; redirectUri: string; tokenPath: string; environment: string} {
   if (existsSync('.env')) process.loadEnvFile('.env');
-  const clientKey = process.env.TIKTOK_CLIENT_KEY;
-  const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
-  const missingNames = [
-    ...(clientKey ? [] : ['TIKTOK_CLIENT_KEY']),
-    ...(clientSecret ? [] : ['TIKTOK_CLIENT_SECRET']),
-  ];
-  if (!clientKey || !clientSecret) exitWithError(`missing env: ${missingNames.join(', ')} (see .env.example)`);
-  return {clientKey, clientSecret, redirectUri: process.env.TIKTOK_REDIRECT_URI || DEFAULT_REDIRECT_URI};
+  const credentials = readTikTokCredentials(process.env);
+  if (!credentials.ok) exitWithError(`missing env: ${credentials.missingNames.join(', ')} (see .env.example)`);
+  const {clientKey, clientSecret, environment, tokenFileName} = credentials.value;
+  const tokenPath = path.join(path.dirname(DEFAULT_TOKEN_PATH), tokenFileName);
+  return {clientKey, clientSecret, environment, tokenPath, redirectUri: process.env.TIKTOK_REDIRECT_URI || DEFAULT_REDIRECT_URI};
 }
 
 function replyWithText(response: ServerResponse, statusCode: number, text: string): void {
@@ -44,11 +43,12 @@ function listen(server: Server, redirectUrl: URL): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const {clientKey, clientSecret, redirectUri} = readEnv();
+  const {clientKey, clientSecret, redirectUri, tokenPath, environment} = readEnv();
+  console.log(`TikTok environment: ${environment}`);
   const redirectUrl = new URL(redirectUri);
   const state = randomBytes(16).toString('hex');
   const codeVerifier = createCodeVerifier();
-  const tokenStore = createFileTokenStore();
+  const tokenStore = createFileTokenStore(tokenPath);
 
   const server = createServer((request, response) => {
     const requestUrl = new URL(request.url ?? '/', redirectUrl);

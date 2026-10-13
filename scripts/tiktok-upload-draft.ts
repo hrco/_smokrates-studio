@@ -6,9 +6,10 @@ process.on('unhandledRejection', (reason) => {
 import {existsSync} from 'node:fs';
 import {readFile, stat} from 'node:fs/promises';
 import path from 'node:path';
+import {readTikTokCredentials} from '../src/tiktok/credentials';
 import {refreshAccessToken} from '../src/tiktok/oauth';
 import {fetchPublishStatus, uploadVideoToInbox, waitForInboxDelivery} from '../src/tiktok/inboxUpload';
-import {createFileTokenStore, getValidAccessToken} from '../src/tiktok/tokenStore';
+import {createFileTokenStore, DEFAULT_TOKEN_PATH, getValidAccessToken} from '../src/tiktok/tokenStore';
 import {isRecord, type TikTokError} from '../src/tiktok/types';
 
 const USAGE = 'usage: tiktok-upload-draft <path-to-mp4>';
@@ -33,16 +34,12 @@ async function readVideoPathArg(): Promise<string> {
   return videoPath;
 }
 
-function readClientCredentials(): {clientKey: string; clientSecret: string} {
+function readClientCredentials(): {clientKey: string; clientSecret: string; tokenPath: string; environment: string} {
   if (existsSync('.env')) process.loadEnvFile('.env');
-  const clientKey = process.env.TIKTOK_CLIENT_KEY;
-  const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
-  const missingNames = [
-    ...(clientKey ? [] : ['TIKTOK_CLIENT_KEY']),
-    ...(clientSecret ? [] : ['TIKTOK_CLIENT_SECRET']),
-  ];
-  if (!clientKey || !clientSecret) exitWithError(`missing env: ${missingNames.join(', ')} (see .env.example)`);
-  return {clientKey, clientSecret};
+  const credentials = readTikTokCredentials(process.env);
+  if (!credentials.ok) exitWithError(`missing env: ${credentials.missingNames.join(', ')} (see .env.example)`);
+  const {clientKey, clientSecret, environment, tokenFileName} = credentials.value;
+  return {clientKey, clientSecret, environment, tokenPath: path.join(path.dirname(DEFAULT_TOKEN_PATH), tokenFileName)};
 }
 
 async function readCaption(videoPath: string): Promise<string | undefined> {
@@ -57,10 +54,11 @@ async function readCaption(videoPath: string): Promise<string | undefined> {
 
 async function main(): Promise<void> {
   const videoPath = await readVideoPathArg();
-  const {clientKey, clientSecret} = readClientCredentials();
+  const {clientKey, clientSecret, tokenPath, environment} = readClientCredentials();
+  console.log(`TikTok environment: ${environment}`);
 
   const tokenResult = await getValidAccessToken(
-    createFileTokenStore(),
+    createFileTokenStore(tokenPath),
     (refreshToken) => refreshAccessToken({clientKey, clientSecret, refreshToken}, fetch),
     Date.now(),
   );
