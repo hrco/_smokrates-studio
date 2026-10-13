@@ -41,3 +41,15 @@ Drafts land in the TikTok inbox. They carry no caption.
 - The inbox init call allows 6 requests per minute.
 - The status call allows 30 requests per minute. The script polls every 5 seconds.
 - Single upload chunk only: videos up to 64 MB. Chunked upload is not built.
+
+## Public site
+TikTok needs a website, terms and privacy URL on a domain you can verify. The static site in `site/` serves them from the Oracle box. Follow this order:
+1. At Hostinger, add an A record: `nopanicpost` -> `92.5.184.225`. Check it with `scripts/deploy-site.sh check`.
+2. Run `npm run deploy:site`. You run it, not an agent: it publishes the site.
+3. Enter the URLs in the TikTok developer portal:
+   - Website: `https://nopanicpost.donotpanic.space/`
+   - Terms of Service: `https://nopanicpost.donotpanic.space/terms/`
+   - Privacy Policy: `https://nopanicpost.donotpanic.space/privacy/`
+4. Verify the domain in the portal, with one of:
+   - a DNS TXT record at Hostinger, or
+   - a signature file: download it from the portal, then run `scripts/deploy-site.sh verify-file <path-to-tiktok-file>.txt`.
