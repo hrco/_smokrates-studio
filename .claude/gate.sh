@@ -3,3 +3,5 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 npm run typecheck && npm test
+bash scripts/check-docs.sh
+echo "gate ok"

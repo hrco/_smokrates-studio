@@ -11,8 +11,20 @@ Automated Smokrates TikTok studio: renders 1-3 vertical motion videos a day from
 
 ## Gate
 ```bash
-npm run typecheck && npm test
+npm run typecheck && npm test && bash scripts/check-docs.sh
 ```
+`.claude/gate.sh` runs the same steps and prints "gate ok".
+
+## Docs
+- `docs/project-guidelines.md` is the pitch for cycle 1.
+- `docs/architecture.md` is the current map. Decisions are in `docs/adr/`.
+- `docs/interactions.md` is the click dictionary.
+- `docs/accessibility.md` is WCAG 2.2 AA on DNP XIII.
+- `docs/interfaces.md` and `docs/openapi.yaml` are the contracts.
+- `docs/ad-inventory.md` says there are no ad slots.
+- `docs/workflow.md` and `docs/project-status.md` are how work moves.
+- Rule: add a control, endpoint or record only in the same change as its row in the owning doc.
+- Rule: never backtick a dotted name (a filename) in `docs/interfaces.md`. The gate reads it as an operationId.
 
 ## Decisions
 - One repo, remote `git@github.com:hrco/_smokrates-studio.git`, branch -> PR, never straight to main.

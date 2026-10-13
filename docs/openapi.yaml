@@ -1,0 +1,353 @@
+openapi: 3.1.0
+info:
+  title: Smokrates studio API
+  version: 0.0.0
+  description: Browser-to-API contract for the local review page. Write an operation here before its handler. The API never returns a token.
+servers:
+  - url: http://127.0.0.1:8724
+paths:
+  /api/plans:
+    post:
+      operationId: plan.generate
+      summary: Run the Showrunner and write the plan for one week.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanGenerate"
+      responses:
+        "201":
+          description: Plan written.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/plans/{weekStart}:
+    get:
+      operationId: plan.get
+      summary: Read the plan and its episodes for one week.
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      responses:
+        "200":
+          description: The plan.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/plans/{weekStart}/approve:
+    post:
+      operationId: week.approve
+      summary: Approve every ready episode of the week. The scheduler may then send them.
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      responses:
+        "200":
+          description: Week approved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/episodes/{episodeId}:
+    patch:
+      operationId: episode.update
+      summary: Change the time, caption, track, start second, format or label decision of one episode.
+      parameters:
+        - $ref: "#/components/parameters/EpisodeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EpisodeUpdate"
+      responses:
+        "200":
+          description: Episode updated. A change to track, start second or format clears the render.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Episode"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/episodes/{episodeId}/approve:
+    post:
+      operationId: episode.approve
+      summary: Approve one rendered episode.
+      parameters:
+        - $ref: "#/components/parameters/EpisodeId"
+      responses:
+        "200":
+          description: Episode approved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Episode"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/episodes/{episodeId}/skip:
+    post:
+      operationId: episode.skip
+      summary: Skip one night. A skipped episode is never sent.
+      parameters:
+        - $ref: "#/components/parameters/EpisodeId"
+      responses:
+        "200":
+          description: Episode skipped.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Episode"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/episodes/{episodeId}/swap:
+    post:
+      operationId: episode.swap
+      summary: Ask the Showrunner for a new night in place of this one.
+      parameters:
+        - $ref: "#/components/parameters/EpisodeId"
+      responses:
+        "200":
+          description: New episode written. It is not approved and not rendered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Episode"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/episodes/{episodeId}/render:
+    post:
+      operationId: episode.render
+      summary: Render one episode to a 9:16 master. Makes new assets first if the episode needs them.
+      parameters:
+        - $ref: "#/components/parameters/EpisodeId"
+      responses:
+        "202":
+          description: Render started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Episode"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/canon:
+    post:
+      operationId: canon.approve
+      summary: Admin approves the canonical still of the man. Later pictures descend from it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CanonApprove"
+      responses:
+        "200":
+          description: Canonical still set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Canon"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/connections:
+    get:
+      operationId: connections.list
+      summary: List the platforms and whether each is connected. Never returns a token.
+      responses:
+        "200":
+          description: The connections.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Connection"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/publishes:
+    get:
+      operationId: publishes.list
+      summary: List the publish log for one week.
+      parameters:
+        - name: weekStart
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/WeekStart"
+      responses:
+        "200":
+          description: The publishes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Publish"
+        default:
+          $ref: "#/components/responses/Error"
+components:
+  parameters:
+    WeekStart:
+      name: weekStart
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/WeekStart"
+    EpisodeId:
+      name: episodeId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Error:
+      description: The call failed. The message is plain words the Creator can act on.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    WeekStart:
+      type: string
+      format: date
+      description: The Monday of the week, as YYYY-MM-DD.
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    PlanGenerate:
+      type: object
+      required: [weekStart]
+      properties:
+        weekStart:
+          $ref: "#/components/schemas/WeekStart"
+    Plan:
+      type: object
+      required: [weekStart, status, episodes]
+      properties:
+        weekStart:
+          $ref: "#/components/schemas/WeekStart"
+        status:
+          type: string
+          enum: [draft, approved]
+        episodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Episode"
+    Episode:
+      type: object
+      required: [id, night, format, trackSlug, startSecond, caption, claim, publishAt, labelDecision, status]
+      properties:
+        id:
+          type: string
+        night:
+          type: integer
+          minimum: 1
+          maximum: 7
+        format:
+          $ref: "#/components/schemas/Format"
+        trackSlug:
+          type: string
+        startSecond:
+          type: number
+          minimum: 0
+        caption:
+          type: string
+        claim:
+          type: string
+        publishAt:
+          type: string
+          format: date-time
+        labelDecision:
+          $ref: "#/components/schemas/LabelDecision"
+        status:
+          type: string
+          enum: [planned, rendering, ready, approved, skipped, not_new, published]
+        renderPath:
+          type: string
+    EpisodeUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        publishAt:
+          type: string
+          format: date-time
+        caption:
+          type: string
+        trackSlug:
+          type: string
+        startSecond:
+          type: number
+          minimum: 0
+        format:
+          $ref: "#/components/schemas/Format"
+        labelDecision:
+          $ref: "#/components/schemas/LabelDecision"
+    Format:
+      type: string
+      enum: [track_card, scene, loop, title]
+    LabelDecision:
+      type: string
+      enum: [label_on, label_off]
+    CanonApprove:
+      type: object
+      required: [assetId]
+      properties:
+        assetId:
+          type: string
+    Canon:
+      type: object
+      required: [assetId, approvedAt]
+      properties:
+        assetId:
+          type: string
+        approvedAt:
+          type: string
+          format: date-time
+    Connection:
+      type: object
+      required: [platform, isConnected, environment, scopes]
+      properties:
+        platform:
+          type: string
+          enum: [tiktok, youtube]
+        isConnected:
+          type: boolean
+        environment:
+          type: string
+          enum: [sandbox, production]
+        scopes:
+          type: array
+          items:
+            type: string
+    Publish:
+      type: object
+      required: [id, episodeId, platform, status, attempts]
+      properties:
+        id:
+          type: string
+        episodeId:
+          type: string
+        platform:
+          type: string
+          enum: [tiktok, youtube]
+        externalId:
+          type: string
+        status:
+          type: string
+          enum: [queued, processing, delivered, stalled, failed]
+        attempts:
+          type: integer
+        lastCheckedAt:
+          type: string
+          format: date-time
