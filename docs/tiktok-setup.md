@@ -53,3 +53,9 @@ TikTok needs a website, terms and privacy URL on a domain you can verify. The st
 4. Verify the domain in the portal, with one of:
    - a DNS TXT record at Hostinger, or
    - a signature file: download it from the portal, then run `scripts/deploy-site.sh verify-file <path-to-tiktok-file>.txt`.
+
+## Sandbox test result (14 October 2026)
+
+- A sandbox target account that is set to **private** received the draft: status `SEND_TO_USER_INBOX` within one poll.
+- The public Smokrates account stayed in `PROCESSING_UPLOAD` on two uploads after a 201 PUT. Use a private test account for sandbox tests. Smokrates gets drafts after TikTok's app review.
+- Each pending draft uses one of 5 pending shares per 24 hours.
