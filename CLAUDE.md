@@ -6,6 +6,7 @@ Automated Smokrates TikTok studio: renders 1-3 vertical motion videos a day from
 - install: `npm install`
 - preview: `npm run studio`
 - render: `SMOK_STUDIO_DIR=/path/to/Smokrates npm run render -- <slug> [--start <seconds>] [--background <clip>] [--stills]` -> `out/<date>-<slug>.mp4` + `.json` caption draft
+- tiktok auth (once): `npm run tiktok:auth`; upload a draft to the TikTok inbox: `npm run tiktok:draft -- out/<file>.mp4` (needs `TIKTOK_CLIENT_KEY`/`TIKTOK_CLIENT_SECRET` in `.env`; see `docs/tiktok-setup.md`)
 - gate: `npm run typecheck && npm test`
 
 ## Gate
