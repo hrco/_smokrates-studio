@@ -16,3 +16,4 @@ assets/generated/
 *.wav
 
 .tiktok/
+public/brand/
