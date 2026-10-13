@@ -92,7 +92,10 @@ async function main(): Promise<void> {
     codeChallenge: toCodeChallenge(codeVerifier),
   });
   console.log(`Open this URL in your browser:\n${authorizeUrl}`);
-  execFile('open', [authorizeUrl], (error) => {
+  // The default browser may not hold the creator's TikTok session; TIKTOK_AUTH_BROWSER picks the app (e.g. Safari).
+  const browserApp = process.env.TIKTOK_AUTH_BROWSER;
+  const openArgs = browserApp ? ['-a', browserApp, authorizeUrl] : [authorizeUrl];
+  execFile('open', openArgs, (error) => {
     if (error) console.error('tiktok-auth: could not open the browser; use the URL above.');
   });
 }
