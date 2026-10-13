@@ -90,7 +90,10 @@ async function putVideoBytes(uploadUrl: string, videoBytes: Uint8Array<ArrayBuff
     signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
   });
   if (response.status === 206) return failure(operation, 'partial-upload', 'HTTP 206: expected single chunk complete');
-  if (response.status !== 201 && response.status !== 200) {
+  if (response.status === 200) {
+    return failure(operation, 'upload-not-complete', 'HTTP 200: TikTok signals a complete upload only with 201');
+  }
+  if (response.status !== 201) {
     return failure(operation, 'upload-rejected', `HTTP ${response.status}`);
   }
   return {ok: true, value: null};
@@ -117,7 +120,10 @@ export async function uploadVideoToInbox(
   const init = await initInboxUpload(input.accessToken, size, fetchFn);
   if (!init.ok) return init;
   const put = await putVideoBytes(init.value.uploadUrl, input.videoBytes, fetchFn);
-  if (!put.ok) return put;
+  if (!put.ok) {
+    const {operation, code, detail} = put.error;
+    return failure(operation, code, `${detail} (publish_id ${init.value.publishId})`);
+  }
   return {ok: true, value: {publishId: init.value.publishId}};
 }
 

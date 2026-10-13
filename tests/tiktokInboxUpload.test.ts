@@ -77,6 +77,22 @@ describe('uploadVideoToInbox', () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
+  it('treats HTTP 200 as not complete, because TikTok signals a finished upload only with 201', async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(okInit))
+      .mockResolvedValueOnce(new Response(null, {status: 200}));
+
+    const result = await uploadVideoToInbox({accessToken: 'tok', videoBytes}, fetchFn);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('upload-not-complete');
+      expect(result.error.detail).toContain('HTTP 200');
+      expect(result.error.detail).toContain('v_inbox_file~v2.123');
+    }
+  });
+
   it('treats HTTP 206 as an error and does not leak the upload url', async () => {
     const fetchFn = vi
       .fn<typeof fetch>()
