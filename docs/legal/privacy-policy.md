@@ -13,7 +13,7 @@ NoPanicPost does not request, read or store your profile, followers, messages, c
 
 ## Where data is kept
 
-- The tokens are saved in one file on your own computer (`.tiktok/tokens.json`), readable only by your user account.
+- The tokens are saved in one file on your own computer (`.tiktok/tokens.production.json`), readable only by your user account.
 - NoPanicPost has no server and no database. It sends nothing to the developer.
 - NoPanicPost uses no analytics, no advertising and no tracking.
 
@@ -28,7 +28,7 @@ The tokens stay on your computer until you delete them. TikTok access tokens exp
 ## How to remove access
 
 1. In the TikTok app, open Settings and privacy > Security > Apps and services permissions (the name can vary by version), and remove NoPanicPost.
-2. Delete the file `.tiktok/tokens.json` on your computer.
+2. Delete the file `.tiktok/tokens.production.json` on your computer.
 
 ## Children
 

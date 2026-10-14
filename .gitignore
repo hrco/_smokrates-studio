@@ -16,4 +16,6 @@ assets/generated/
 *.wav
 
 .tiktok/
+.youtube/
+studio-data/
 public/brand/
