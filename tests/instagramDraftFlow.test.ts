@@ -112,6 +112,27 @@ describe('runDraftFlow', () => {
     expect(deps.unstageVideo).not.toHaveBeenCalled();
   });
 
+  it('unstages when creating the container fails and writes no record', async () => {
+    const deps = createDeps({
+      graphResponses: [accountResponse(), jsonResponse({error: {message: 'The parameter video_url is required', code: 100, fbtrace_id: 't'}}, 400)],
+    });
+    const result = await runDraftFlow(input, deps);
+    expect(!result.ok && result.error.code).toBe('100');
+    expect(deps.unstageVideo).toHaveBeenCalledWith({remoteName});
+    expect(deps.writeDraftRecord).not.toHaveBeenCalled();
+  });
+
+  it('unstages when writing the record throws', async () => {
+    const deps = createDeps({
+      graphResponses: [accountResponse(), jsonResponse({id: 'c1'}), jsonResponse({status_code: 'FINISHED'})],
+      writeDraftRecord: vi.fn(async () => {
+        throw new Error('disk full');
+      }),
+    });
+    await expect(runDraftFlow(input, deps)).rejects.toThrow('disk full');
+    expect(deps.unstageVideo).toHaveBeenCalledWith({remoteName});
+  });
+
   it('does not unstage when staging itself fails', async () => {
     const deps = createDeps({
       graphResponses: [accountResponse()],
