@@ -58,19 +58,20 @@ describe('fetchAccount', () => {
 describe('createReelContainer', () => {
   const input = {accessToken: 'tok', userId: '178', caption: 'hello #music'};
 
-  it('posts a resumable REELS JSON body and returns id and uri', async () => {
+  // Regression: graph.instagram.com ignored a JSON body and answered "The parameter video_url is required".
+  it('posts a form-encoded resumable REELS body and returns id and uri', async () => {
     const fetchFn = fetchReturning(jsonResponse({id: 'c1', uri: 'https://rupload.facebook.com/ig-api-upload/v23.0/c1'}));
     const result = await createReelContainer(input, fetchFn);
     expect(result).toEqual({ok: true, value: {containerId: 'c1', uploadUri: 'https://rupload.facebook.com/ig-api-upload/v23.0/c1'}});
     const {url, init} = requestOf(fetchFn);
     expect(url).toBe('https://graph.instagram.com/v23.0/178/media');
     expect(init.method).toBe('POST');
-    expect(init.headers).toEqual({Authorization: 'Bearer tok', 'Content-Type': 'application/json'});
-    expect(JSON.parse(String(init.body))).toEqual({
+    expect(init.headers).toEqual({Authorization: 'Bearer tok', 'Content-Type': 'application/x-www-form-urlencoded'});
+    expect(Object.fromEntries(new URLSearchParams(String(init.body)))).toEqual({
       media_type: 'REELS',
       upload_type: 'resumable',
       caption: 'hello #music',
-      share_to_feed: true,
+      share_to_feed: 'true',
     });
   });
 
@@ -195,7 +196,7 @@ describe('publishContainer', () => {
     expect(result).toEqual({ok: true, value: {mediaId: 'm1'}});
     const {url, init} = requestOf(fetchFn);
     expect(url).toBe('https://graph.instagram.com/v23.0/178/media_publish');
-    expect(JSON.parse(String(init.body))).toEqual({creation_id: 'c1'});
+    expect(Object.fromEntries(new URLSearchParams(String(init.body)))).toEqual({creation_id: 'c1'});
   });
 
   it('maps a Graph error', async () => {

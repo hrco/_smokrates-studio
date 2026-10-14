@@ -19,11 +19,12 @@ function bearerHeaders(accessToken: string): Record<string, string> {
   return {Authorization: `Bearer ${accessToken}`};
 }
 
-function postJson(accessToken: string, payload: Record<string, unknown>): RequestInit {
+/** graph.instagram.com ignores a JSON body on these POSTs, so the fields go form-encoded. */
+function postForm(accessToken: string, fields: Record<string, string>): RequestInit {
   return {
     method: 'POST',
-    headers: {...bearerHeaders(accessToken), 'Content-Type': 'application/json'},
-    body: JSON.stringify(payload),
+    headers: {...bearerHeaders(accessToken), 'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams(fields).toString(),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   };
 }
@@ -55,11 +56,11 @@ export async function createReelContainer(
   const operation = 'create-reel-container';
   const response = await fetchFn(
     graphUrl(`${encodeURIComponent(input.userId)}/media`),
-    postJson(input.accessToken, {
+    postForm(input.accessToken, {
       media_type: 'REELS',
       upload_type: 'resumable',
       caption: input.caption,
-      share_to_feed: true,
+      share_to_feed: 'true',
     }),
   );
   const body = await readGraphBody(operation, response);
@@ -158,7 +159,7 @@ export async function publishContainer(
   const operation = 'publish-container';
   const response = await fetchFn(
     graphUrl(`${encodeURIComponent(input.userId)}/media_publish`),
-    postJson(input.accessToken, {creation_id: input.containerId}),
+    postForm(input.accessToken, {creation_id: input.containerId}),
   );
   const body = await readGraphBody(operation, response);
   if (!body.ok) return body;
