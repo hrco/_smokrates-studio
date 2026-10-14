@@ -16,13 +16,15 @@ Ordered, cycle 1. Each item is one slice and one pull request.
 
 1. Done by this pull request: the plan docs follow the architecture review. ADR 0001 is Accepted. The contracts, the guidelines and the config match the cut.
 2. Done 14 October 2026: the day-1 Grok CLI test passed. Scene stays in cycle 1. Clips are 720p and carry sound, so Scene upscales and mutes them. See `docs/research/grok-day1-test.md`.
-3. Schema, a unique (episodeId, platform) publish row, jobs, and `schema_migrations`. Add a concurrent token-refresh test.
+3. Done 14 October 2026: the SQLite schema, a unique (episodeId, platform) publish row, jobs, and `schema_migrations` exist. The one-heavy-job mutex is a partial unique index on jobs. A shared token provider has a concurrent-refresh test.
 4. Persist the TikTok publish_id at init. Add the 30-minute stalled timeout and the 5-share cap.
 5. Review page on 127.0.0.1:8724 with vendored DNP XIII tokens. Approve, Skip and Time. Replace the sidecar flag aiGenerated:true with a per-episode label decision. No Showrunner.
 6. launchd tick to the daemon. The human still taps Post in TikTok.
 7. Only then: Scene, then the Showrunner, then YouTube.
 
 Open follow-ups from the review:
+
+- Migrations re-read the applied versions only before the first transaction. If the migrate script and the daemon open the database at the same moment, the second fails with "table exists". Only the daemon opens the database, so this waits. Fix: check the version again inside `BEGIN IMMEDIATE`.
 
 - The tiktok-auth error paths call process.exit from the handler. They can leave the server up. Close the server first.
 - The VPS host must come from the environment. `scripts/deploy-site.sh` now requires VPS_HOST.
