@@ -77,7 +77,7 @@ Two weeks. One person plus coding agents, on the MacBook Air (8 GB) that already
 - No bought followers, no engagement pods, no Promote, no Business account.
 - No health, sleep, anxiety or focus claims in any caption or on-screen text.
 - No padding a loop to 60 s. No second post that only crops the first.
-- No Instagram, X or Facebook. No Pulsu Studio integration (the Library keeps one slot for it).
+- No X or Facebook. Instagram Reels go out by CLI only: `instagram:draft` makes a container and the human runs `instagram:publish`. It is not in the daemon tick in cycle 1. No Pulsu Studio integration (the Library keeps one slot for it).
 - No analytics dashboard. View counts need TikTok's `video.list` scope, which is a later cycle.
 - No phone access to the review page, no other creators, no accounts. One user, local only.
 - No monetisation work. A distributor delivery is your step, outside this tool.
