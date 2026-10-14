@@ -19,7 +19,7 @@ The product is for one user on one laptop. It has no accounts and no public web 
 | StudioDaemon, SQLite store, jobs, migrations | Planned (cycle 1) |
 | Review page | Planned (cycle 1) |
 | Tick with publish rows and the 5-share cap | Planned (cycle 1) |
-| Scene format | Planned (cycle 1), only if the Grok kill-gate passes |
+| Scene format | Planned (cycle 1). The Grok kill-gate passed on 14 October 2026. |
 | Showrunner, swap, Loop, Title, YouTube adapter | Deferred to cycle 2 |
 | TikTok direct post | Later. Needs TikTok app review. |
 
@@ -33,7 +33,7 @@ flowchart LR
   admin[Admin]
   studio[Smokrates studio]
   smok[smok-studio folder<br/>tracks and art, read-only]
-  grok[Grok CLI<br/>SuperGrok plan, if the kill-gate passes]
+  grok[Grok CLI<br/>SuperGrok plan, 720p clips]
   tiktok[TikTok]
   oracle[Oracle box<br/>nopanicpost.donotpanic.space]
   creator --> studio

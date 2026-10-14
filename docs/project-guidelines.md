@@ -36,11 +36,14 @@ Two weeks. One person plus coding agents, on the MacBook Air (8 GB) that already
    - **Tracks** come from smok-studio (`SMOK_STUDIO_DIR`). The studio only reads them.
    - **The man's approved 9:16 still** is his identity. It is approved once and kept in `assets/generated/canon/`.
 2. **Week file.** You write up to seven nights by hand. The seven-job template in the research is your guide. For each night you give the format, the track and its start second, the duration, the claim, the caption (one question answered in ordinary words) and the publish time. The API refuses a Grok prompt with the word SMOKRATES or a hex code, and a caption or prompt with a health claim. The Showrunner (`claude -p`) is deferred to cycle 2.
-3. **Day-1 Grok kill-gate.** Test the Grok CLI on day 1, one call per tool: `image_edit`, image-to-video, `generate_audio` and the resolution flags.
-   - **If the test passes,** cycle 1 adds the Scene format after the TrackCard path works. Scene is a Grok insert, then the type on the bare cream panel.
-   - **If the test fails,** cycle 1 is TrackCard plus a Ken Burns move on the cover art. No Grok asset run is built. The week file uses only TrackCard.
-   - A result whose face drifts is rejected, never patched. Clips are always silent.
-4. **Formats.** Remotion compositions that draw every letter, so the name is identical on every post. Cycle 1 ships **TrackCard** (exists). Scene ships only if the kill-gate passes. Loop and Title are cycle 2. The code colours are cream `#f3e9d2`, neon cyan `#2fe6ff`, neon purple `#a64dff` and navy `#0b1030`. The dub is the only sound.
+3. **Day-1 Grok kill-gate: passed on 14 October 2026.** The evidence is in `docs/research/grok-day1-test.md`. Cycle 1 adds the Scene format after the TrackCard path works. Scene is a Grok insert, then the type on the bare cream panel. The test fixed these rules for the asset run:
+   - `image_edit` with `aspect_ratio` `9:16` makes a 720×1280 still from the approved still. The face holds.
+   - `reference_to_video` is the only video tool. Its highest resolution is 720p. There is no 1080p. Remotion scales the clip up to 1080×1920.
+   - There is no `generate_audio` flag. Every clip comes with ambient sound. The Scene composition mutes the clip, so the dub is the only sound.
+   - The same still as `first_frame` and `last_frame` makes a seamless loop. Loop stays in cycle 2.
+   - The tool saves into `~/.grok/sessions/`. The asset worker copies the file from the path in the tool message.
+   - A result whose face drifts is rejected, never patched.
+4. **Formats.** Remotion compositions that draw every letter, so the name is identical on every post. Cycle 1 ships **TrackCard** (exists). Scene ships, because the kill-gate passed. Loop and Title are cycle 2. The code colours are cream `#f3e9d2`, neon cyan `#2fe6ff`, neon purple `#a64dff` and navy `#0b1030`. The dub is the only sound.
 5. **Review page.** The daemon serves it at `http://127.0.0.1:8724`, drawn in the DNP XIII design system. The week is one comic page: a panel per night with:
    - the preview
    - the caption
@@ -57,7 +60,6 @@ Two weeks. One person plus coding agents, on the MacBook Air (8 GB) that already
 - The `claude -p` Showrunner, and the plan generator it feeds.
 - Swapping a night for a new one.
 - The Loop and Title formats.
-- The Scene format, if the Grok kill-gate fails.
 - YouTube upload and YouTube sign-in. The audit request stays in cycle 1 as a human task.
 - Five SQLite writers. The design is one daemon.
 
@@ -65,7 +67,7 @@ Two weeks. One person plus coding agents, on the MacBook Air (8 GB) that already
 
 - **The two audits.** TikTok's app review and YouTube's API audit can each take weeks or fail. The cycle ships on TikTok drafts alone. Going public automatically is a switch for later.
 - **Character drift.** Only edits of the approved still, never a new text prompt for him. Text-to-video invents a new face and is not used.
-- **Grok CLI options.** The research could not confirm that the CLI passes `generate_audio`, `last_frame` or the resolution. The day-1 kill-gate tests this.
+- **Grok CLI changes.** The CLI is version 1.0.52 on 14 October 2026. A new version can change the tools. Run the day-1 test again after a Grok update, before an asset run.
 - **Render time on 8 GB.** A week renders overnight at concurrency 2, never during the day, and never at the same time as an asset run. The daemon enforces this.
 - **TikTok delivery lag.** Delivery can take longer than 5 minutes. The tick re-checks on its next run and does not block.
 - **The public-account stall.** On 14 October, inbox uploads to the public Smokrates account stayed in `PROCESSING_UPLOAD` while a private test account received them. A share in `PROCESSING_UPLOAD` for over 30 minutes becomes "stalled" and is never retried. Each init spends one of 5 pending shares a day, so the tick stops at 5 shares in flight.

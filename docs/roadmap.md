@@ -8,7 +8,7 @@ The plan is in `docs/project-guidelines.md`. It is cut to a Grok kill-gate, one 
 - A caption JSON sits next to each video: caption draft, hashtags, `aiGenerated: true`.
 - Upload is manual. The human taps publish.
 
-## Phase 1a: Grok CLI asset generation (cycle 1 kill-gate, Scene only if it passes)
+## Phase 1a: Grok CLI asset generation (cycle 1; the kill-gate passed on 14 October 2026)
 - Run Grok headless: `grok agent` or `grok -p`, with `--max-turns 25` or more.
 - Cap the files it may read.
 - Outputs go to `assets/generated/<slug>/` (ignored by git).
