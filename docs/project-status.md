@@ -15,7 +15,7 @@ Updated: 2026-10-14
 Ordered, cycle 1. Each item is one slice and one pull request.
 
 1. Done by this pull request: the plan docs follow the architecture review. ADR 0001 is Accepted. The contracts, the guidelines and the config match the cut.
-2. Day-1 Grok CLI test. Write the result into the guidelines. If it fails, cycle 1 is TrackCard plus Ken Burns.
+2. Done 14 October 2026: the day-1 Grok CLI test passed. Scene stays in cycle 1. Clips are 720p and carry sound, so Scene upscales and mutes them. See `docs/research/grok-day1-test.md`.
 3. Schema, a unique (episodeId, platform) publish row, jobs, and `schema_migrations`. Add a concurrent token-refresh test.
 4. Persist the TikTok publish_id at init. Add the 30-minute stalled timeout and the 5-share cap.
 5. Review page on 127.0.0.1:8724 with vendored DNP XIII tokens. Approve, Skip and Time. Replace the sidecar flag aiGenerated:true with a per-episode label decision. No Showrunner.
