@@ -3,17 +3,13 @@ import {
   failure,
   graphUrl,
   isNonEmptyString,
-  isRecord,
   readGraphBody,
-  readGraphError,
-  readJsonBody,
   type FetchFn,
   type InstagramResult,
 } from './types';
 
-const UPLOAD_TIMEOUT_MS = 5 * 60 * 1000;
-const DEFAULT_POLL_INTERVAL_MS = 5000;
-const DEFAULT_MAX_WAIT_MS = 5 * 60 * 1000;
+const DEFAULT_POLL_INTERVAL_MS = 10_000;
+const DEFAULT_MAX_WAIT_MS = 10 * 60 * 1000;
 
 function bearerHeaders(accessToken: string): Record<string, string> {
   return {Authorization: `Bearer ${accessToken}`};
@@ -48,53 +44,25 @@ export async function fetchAccount(
   return {ok: true, value: {userId, username}};
 }
 
-/** Creates a resumable REELS container. The returned uri takes the video bytes next. */
+/** Creates a REELS container. Meta downloads the video from videoUrl while the container is IN_PROGRESS. */
 export async function createReelContainer(
-  input: {accessToken: string; userId: string; caption: string},
+  input: {accessToken: string; userId: string; caption: string; videoUrl: string},
   fetchFn: FetchFn,
-): Promise<InstagramResult<{containerId: string; uploadUri: string}>> {
+): Promise<InstagramResult<{containerId: string}>> {
   const operation = 'create-reel-container';
   const response = await fetchFn(
     graphUrl(`${encodeURIComponent(input.userId)}/media`),
     postForm(input.accessToken, {
       media_type: 'REELS',
-      upload_type: 'resumable',
+      video_url: input.videoUrl,
       caption: input.caption,
       share_to_feed: 'true',
     }),
   );
   const body = await readGraphBody(operation, response);
   if (!body.ok) return body;
-  const {id, uri} = body.value;
-  if (!isNonEmptyString(id) || !isNonEmptyString(uri)) {
-    return failure(operation, 'invalid-response', 'container response without id and uri');
-  }
-  return {ok: true, value: {containerId: id, uploadUri: uri}};
-}
-
-/** Sends the whole video in one request to the resumable upload uri. */
-export async function uploadReelBytes(
-  input: {accessToken: string; uploadUri: string; videoBytes: Uint8Array<ArrayBuffer>; containerId: string},
-  fetchFn: FetchFn,
-): Promise<InstagramResult<null>> {
-  const operation = 'upload-reel-bytes';
-  const size = input.videoBytes.byteLength;
-  if (size === 0) return failure(operation, 'empty-video', 'the video file is empty');
-  const containerNote = `(container ${input.containerId})`;
-
-  const response = await fetchFn(input.uploadUri, {
-    method: 'POST',
-    headers: {Authorization: `OAuth ${input.accessToken}`, offset: '0', file_size: String(size)},
-    body: input.videoBytes,
-    signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
-  });
-  const body = await readJsonBody(response);
-  if (!isRecord(body)) return failure(operation, 'invalid-response', `HTTP ${response.status} with a non-JSON body ${containerNote}`);
-  if (body.success === true) return {ok: true, value: null};
-
-  const graphError = readGraphError(operation, body);
-  if (graphError) return failure(operation, graphError.code, `${graphError.detail} ${containerNote}`);
-  return failure(operation, 'upload-rejected', `HTTP ${response.status} without success ${containerNote}`);
+  if (!isNonEmptyString(body.value.id)) return failure(operation, 'invalid-response', 'container response without id');
+  return {ok: true, value: {containerId: body.value.id}};
 }
 
 export type ContainerStatus = {statusCode: string; status?: string};

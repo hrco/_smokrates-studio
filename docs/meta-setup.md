@@ -1,6 +1,16 @@
 # Instagram Reels setup
 
-The studio uploads a rendered video to Instagram as a Reel container. It posts only when you run the publish command.
+The studio sends a rendered video to Instagram as a Reel container. It posts only when you run the publish command.
+
+## How the video reaches Meta
+- Instagram Login has no resumable upload. Meta's upload host is only for Facebook Login for Business. The container call needs a public `video_url`.
+- The draft script copies the mp4 to the Oracle box for a few minutes. Caddy serves it at `https://nopanicpost.donotpanic.space/ig-staging/<random name>.mp4`.
+- Meta downloads the file while the container is IN_PROGRESS. The script then removes the file, also when the draft fails.
+- The video is public at that URL during processing. The name is 32 random hex characters.
+- The script needs `VPS_HOST` (the box address) and the SSH key (`VPS_SSH_KEY`, default `~/.ssh/oracle-vps.key`; `VPS_SSH_USER`, default `ubuntu`). These are the same settings as `scripts/deploy-site.sh`.
+- If the removal fails, the script prints a warning with the remote path. Delete that file by hand.
+- `scripts/deploy-site.sh deploy` syncs with `--delete` and wipes the staging folder. That is fine: staged files are temporary.
+- You do not need webhooks, a callback URL or a verify token.
 
 ## Register the Meta app
 1. Open developers.facebook.com and create the app `smokrates-automation`.
@@ -34,7 +44,7 @@ The studio uploads a rendered video to Instagram as a Reel container. It posts o
 1. Render a video: `npm run render -- <slug>`.
 2. Run `npm run instagram:draft -- out/<file>.mp4`.
 3. The script reads the caption from `caption` in the sidecar JSON. Instagram needs it when the container is made.
-4. The script uploads the video, waits for FINISHED and writes `out/<file>.instagram.json`.
+4. The script stages the video on the Oracle box, checks the public URL, creates the container, waits for FINISHED, removes the staged file and writes `out/<file>.instagram.json`. Set `VPS_HOST` first.
 5. The script prints the next command. Run it when you are ready to post:
    `npm run instagram:publish -- out/<file>.mp4`
 6. The publish script prints the permalink. It refuses a second post of the same video.

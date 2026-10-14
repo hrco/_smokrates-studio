@@ -4,7 +4,6 @@ import {
   fetchAccount,
   fetchPermalink,
   publishContainer,
-  uploadReelBytes,
   waitForContainer,
 } from '../src/instagram/reels';
 
@@ -56,20 +55,20 @@ describe('fetchAccount', () => {
 });
 
 describe('createReelContainer', () => {
-  const input = {accessToken: 'tok', userId: '178', caption: 'hello #music'};
+  const input = {accessToken: 'tok', userId: '178', caption: 'hello #music', videoUrl: 'https://example.test/ig-staging/a.mp4'};
 
-  // Regression: graph.instagram.com ignored a JSON body and answered "The parameter video_url is required".
-  it('posts a form-encoded resumable REELS body and returns id and uri', async () => {
-    const fetchFn = fetchReturning(jsonResponse({id: 'c1', uri: 'https://rupload.facebook.com/ig-api-upload/v23.0/c1'}));
+  // Regression: graph.instagram.com answered "The parameter video_url is required" to a resumable container.
+  it('posts a form-encoded REELS body with video_url and returns the id', async () => {
+    const fetchFn = fetchReturning(jsonResponse({id: 'c1'}));
     const result = await createReelContainer(input, fetchFn);
-    expect(result).toEqual({ok: true, value: {containerId: 'c1', uploadUri: 'https://rupload.facebook.com/ig-api-upload/v23.0/c1'}});
+    expect(result).toEqual({ok: true, value: {containerId: 'c1'}});
     const {url, init} = requestOf(fetchFn);
     expect(url).toBe('https://graph.instagram.com/v23.0/178/media');
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({Authorization: 'Bearer tok', 'Content-Type': 'application/x-www-form-urlencoded'});
     expect(Object.fromEntries(new URLSearchParams(String(init.body)))).toEqual({
       media_type: 'REELS',
-      upload_type: 'resumable',
+      video_url: 'https://example.test/ig-staging/a.mp4',
       caption: 'hello #music',
       share_to_feed: 'true',
     });
@@ -80,49 +79,8 @@ describe('createReelContainer', () => {
     expect(!result.ok && result.error.code).toBe('190');
   });
 
-  it('fails when uri is missing', async () => {
-    const result = await createReelContainer(input, fetchReturning(jsonResponse({id: 'c1'})));
-    expect(!result.ok && result.error.code).toBe('invalid-response');
-  });
-});
-
-describe('uploadReelBytes', () => {
-  const videoBytes = new Uint8Array([1, 2, 3, 4, 5]);
-  const input = {accessToken: 'tok', uploadUri: 'https://rupload.example/c1', videoBytes, containerId: 'c1'};
-
-  it('sends OAuth, offset and file_size headers with the bytes', async () => {
-    const fetchFn = fetchReturning(jsonResponse({success: true, message: 'Upload successful.'}));
-    const result = await uploadReelBytes(input, fetchFn);
-    expect(result).toEqual({ok: true, value: null});
-    const {url, init} = requestOf(fetchFn);
-    expect(url).toBe('https://rupload.example/c1');
-    expect(init.method).toBe('POST');
-    expect(init.headers).toEqual({Authorization: 'OAuth tok', offset: '0', file_size: '5'});
-    expect(init.body).toBe(videoBytes);
-  });
-
-  it('refuses an empty video without calling fetch', async () => {
-    const fetchFn = vi.fn<typeof fetch>();
-    const result = await uploadReelBytes({...input, videoBytes: new Uint8Array(0)}, fetchFn);
-    expect(!result.ok && result.error.code).toBe('empty-video');
-    expect(fetchFn).not.toHaveBeenCalled();
-  });
-
-  it('maps a Graph error and names the container', async () => {
-    const result = await uploadReelBytes(input, fetchReturning(jsonResponse(graphError, 400)));
-    expect(result).toEqual({
-      ok: false,
-      error: {operation: 'upload-reel-bytes', code: '190', detail: 'Invalid token (fbtrace_id trace-1) (container c1)'},
-    });
-  });
-
-  it('fails when success is not true', async () => {
-    const result = await uploadReelBytes(input, fetchReturning(jsonResponse({success: false}, 500)));
-    expect(!result.ok && result.error.code).toBe('upload-rejected');
-  });
-
-  it('fails on a non-JSON body', async () => {
-    const result = await uploadReelBytes(input, fetchReturning(new Response('oops', {status: 500})));
+  it('fails when id is missing', async () => {
+    const result = await createReelContainer(input, fetchReturning(jsonResponse({})));
     expect(!result.ok && result.error.code).toBe('invalid-response');
   });
 });

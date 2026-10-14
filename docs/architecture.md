@@ -14,7 +14,7 @@ The product is for one user on one laptop. It has no accounts and no public web 
 | --- | --- |
 | Remotion render of one track (TrackCard) | Exists |
 | TikTok sign-in (PKCE) and inbox draft upload | Exists. Proven in the sandbox. |
-| Instagram Reels draft, publish and token refresh (CLI scripts) | Exists. Not in the daemon tick. |
+| Instagram Reels draft, publish and token refresh (CLI scripts). The draft stages the mp4 on the Oracle box for Meta to download. | Exists. Not in the daemon tick. |
 | Public site on the Oracle box, and its deploy script | Exists |
 | Review demo video (ReviewDemo) | Exists |
 | StudioDaemon, SQLite store, jobs, migrations | Planned (cycle 1) |

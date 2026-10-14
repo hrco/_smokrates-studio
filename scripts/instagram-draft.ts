@@ -6,8 +6,9 @@ process.on('unhandledRejection', (reason) => {
 import {existsSync} from 'node:fs';
 import {readFile, stat} from 'node:fs/promises';
 import path from 'node:path';
-import {canCreateDraft, createDraftRecord, draftRecordPath, readDraftRecord, writeDraftRecord} from '../src/instagram/draftRecord';
-import {createReelContainer, fetchAccount, uploadReelBytes, waitForContainer} from '../src/instagram/reels';
+import {runDraftFlow} from '../src/instagram/draftFlow';
+import {canCreateDraft, draftRecordPath, readDraftRecord, writeDraftRecord} from '../src/instagram/draftRecord';
+import {checkUrlReachable, createExecFileRunner, readStagingConfig, stageVideo, unstageVideo} from '../src/instagram/staging';
 import {createFileTokenStore, resolveAccessToken} from '../src/instagram/token';
 import {isRecord, type InstagramError} from '../src/instagram/types';
 
@@ -60,26 +61,30 @@ async function main(): Promise<void> {
   const {accessToken, isExpiringSoon, expiresAt} = tokenResult.value;
   if (isExpiringSoon) console.warn(`warning: token expires ${expiresAt}; run npm run instagram:refresh`);
 
-  const account = await fetchAccount({accessToken}, fetch);
-  if (!account.ok) return exitWithInstagramError(account.error);
-  const {userId, username} = account.value;
+  const stagingConfig = readStagingConfig(process.env);
+  if (!stagingConfig.ok) return exitWithInstagramError(stagingConfig.error);
+  const config = stagingConfig.value;
+  const runner = createExecFileRunner();
 
-  const container = await createReelContainer({accessToken, userId, caption}, fetch);
-  if (!container.ok) return exitWithInstagramError(container.error);
-  const {containerId, uploadUri} = container.value;
-  console.log(`container: ${containerId}`);
+  const outcome = await runDraftFlow(
+    {accessToken, videoPath, caption, recordPath},
+    {
+      fetchFn: fetch,
+      stageVideo: ({localPath}) => stageVideo({localPath, config}, runner),
+      unstageVideo: ({remoteName}) => unstageVideo({remoteName, config}, runner),
+      checkUrlReachable: (input) => checkUrlReachable(input, fetch),
+      readFileSizeBytes: async (filePath) => (await stat(filePath)).size,
+      writeDraftRecord,
+      nowMs: Date.now,
+      log: console.log,
+      warn: console.warn,
+    },
+  );
+  if (!outcome.ok) return exitWithInstagramError(outcome.error);
 
-  const videoBytes = await readFile(videoPath);
-  const uploaded = await uploadReelBytes({accessToken, uploadUri, videoBytes, containerId}, fetch);
-  if (!uploaded.ok) return exitWithInstagramError(uploaded.error);
-
-  const ready = await waitForContainer({accessToken, containerId}, fetch);
-  if (!ready.ok) return exitWithInstagramError(ready.error);
-
-  const record = createDraftRecord({containerId, userId, username, nowMs: Date.now()});
-  await writeDraftRecord(recordPath, record);
-  console.log(`account: @${username}`);
-  console.log(`container: ${containerId} (FINISHED)`);
+  const {record} = outcome.value;
+  console.log(`account: @${record.username}`);
+  console.log(`container: ${record.containerId} (FINISHED)`);
   console.log(`expires: ${record.expiresAt}`);
   console.log(`\nnext: npm run instagram:publish -- ${videoPath}`);
   console.log(`\n${AI_LABEL_NOTE}`);
