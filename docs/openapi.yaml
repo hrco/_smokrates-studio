@@ -2,20 +2,20 @@ openapi: 3.1.0
 info:
   title: Smokrates studio API
   version: 0.0.0
-  description: Browser-to-API contract for the local review page. Write an operation here before its handler. The API never returns a token.
+  description: Browser-to-API contract for the local review page and the launchd tick. Write an operation here before its handler. The API never returns a token. All dates use the Europe/Ljubljana timezone.
 servers:
   - url: http://127.0.0.1:8724
 paths:
   /api/plans:
     post:
-      operationId: plan.generate
-      summary: Run the Showrunner and write the plan for one week.
+      operationId: plan.import
+      summary: Load a hand-written week. Refuses with 409 if the week exists and any episode is not planned, unless replace is true. Validates every caption and prompt.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PlanGenerate"
+              $ref: "#/components/schemas/PlanImport"
       responses:
         "201":
           description: Plan written.
@@ -23,6 +23,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Plan"
+        "409":
+          $ref: "#/components/responses/Error"
         default:
           $ref: "#/components/responses/Error"
   /api/plans/{weekStart}:
@@ -106,37 +108,55 @@ paths:
                 $ref: "#/components/schemas/Episode"
         default:
           $ref: "#/components/responses/Error"
-  /api/episodes/{episodeId}/swap:
-    post:
-      operationId: episode.swap
-      summary: Ask the Showrunner for a new night in place of this one.
-      parameters:
-        - $ref: "#/components/parameters/EpisodeId"
-      responses:
-        "200":
-          description: New episode written. It is not approved and not rendered.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Episode"
-        default:
-          $ref: "#/components/responses/Error"
   /api/episodes/{episodeId}/render:
     post:
       operationId: episode.render
-      summary: Render one episode to a 9:16 master. Makes new assets first if the episode needs them.
+      summary: Enqueue the render of one episode to a 9:16 master. Returns the job. Poll job.get.
       parameters:
         - $ref: "#/components/parameters/EpisodeId"
       responses:
         "202":
-          description: Render started.
+          description: Render job queued.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Episode"
+                $ref: "#/components/schemas/Job"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/jobs/{jobId}:
+    get:
+      operationId: job.get
+      summary: Read one job. A job is long work such as a render or a send.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
         default:
           $ref: "#/components/responses/Error"
   /api/canon:
+    get:
+      operationId: canon.get
+      summary: Read the approved canonical still, if there is one.
+      responses:
+        "200":
+          description: The canonical still.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Canon"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
     post:
       operationId: canon.approve
       summary: Admin approves the canonical still of the man. Later pictures descend from it.
@@ -155,10 +175,60 @@ paths:
                 $ref: "#/components/schemas/Canon"
         default:
           $ref: "#/components/responses/Error"
+  /api/assets:
+    get:
+      operationId: assets.list
+      summary: List stills and clips, newest first. The Admin picks the canonical still from this list.
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [still, clip]
+      responses:
+        "200":
+          description: The assets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/health:
+    get:
+      operationId: health.get
+      summary: Say whether the daemon is up, which schema version it runs, and whether a worker is busy.
+      responses:
+        "200":
+          description: The daemon is up.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        default:
+          $ref: "#/components/responses/Error"
+  /api/tick:
+    post:
+      operationId: tick.run
+      summary: Called by launchd every 15 minutes. Sends due, approved episodes. Idempotent.
+      responses:
+        "202":
+          description: Work was queued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "200":
+          description: Nothing is due.
+        default:
+          $ref: "#/components/responses/Error"
   /api/connections:
     get:
       operationId: connections.list
-      summary: List the platforms and whether each is connected. Never returns a token.
+      summary: List the platforms and whether each is connected. Derived from the token files. Never returns a token.
       responses:
         "200":
           description: The connections.
@@ -216,7 +286,7 @@ components:
     WeekStart:
       type: string
       format: date
-      description: The Monday of the week, as YYYY-MM-DD.
+      description: The Monday of the week, as YYYY-MM-DD, in the Europe/Ljubljana timezone.
     Error:
       type: object
       required: [code, message]
@@ -225,12 +295,21 @@ components:
           type: string
         message:
           type: string
-    PlanGenerate:
+    PlanImport:
       type: object
-      required: [weekStart]
+      required: [weekStart, episodes]
       properties:
         weekStart:
           $ref: "#/components/schemas/WeekStart"
+        replace:
+          type: boolean
+          default: false
+          description: Replace an existing week even if an episode is past planned.
+        episodes:
+          type: array
+          maxItems: 7
+          items:
+            $ref: "#/components/schemas/EpisodeInput"
     Plan:
       type: object
       required: [weekStart, status, episodes]
@@ -244,9 +323,41 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Episode"
+    EpisodeInput:
+      type: object
+      required: [night, format, trackSlug, startSecond, durationSeconds, caption, claim, publishAt, labelDecision]
+      properties:
+        night:
+          type: integer
+          minimum: 1
+          maximum: 7
+        format:
+          $ref: "#/components/schemas/Format"
+        trackSlug:
+          type: string
+        startSecond:
+          type: number
+          minimum: 0
+        durationSeconds:
+          type: number
+          exclusiveMinimum: 0
+        caption:
+          type: string
+          description: Plain words. The API refuses a health claim.
+        claim:
+          type: string
+        publishAt:
+          type: string
+          format: date-time
+          description: Europe/Ljubljana offset.
+        labelDecision:
+          $ref: "#/components/schemas/LabelDecision"
+        groksPrompt:
+          type: string
+          description: Only for the scene format. The API refuses the word SMOKRATES, a hex code or a health claim.
     Episode:
       type: object
-      required: [id, night, format, trackSlug, startSecond, caption, claim, publishAt, labelDecision, status]
+      required: [id, night, format, trackSlug, startSecond, durationSeconds, caption, claim, publishAt, labelDecision, status]
       properties:
         id:
           type: string
@@ -261,20 +372,26 @@ components:
         startSecond:
           type: number
           minimum: 0
+        durationSeconds:
+          type: number
+          exclusiveMinimum: 0
         caption:
           type: string
+          description: Plain words. The API refuses a health claim.
         claim:
           type: string
         publishAt:
           type: string
           format: date-time
+          description: Europe/Ljubljana offset.
         labelDecision:
           $ref: "#/components/schemas/LabelDecision"
         status:
           type: string
-          enum: [planned, rendering, ready, approved, skipped, not_new, published]
+          enum: [planned, rendering, ready, approved, skipped, not_new]
         renderPath:
           type: string
+          description: out/<episodeId>.mp4
     EpisodeUpdate:
       type: object
       minProperties: 1
@@ -284,11 +401,15 @@ components:
           format: date-time
         caption:
           type: string
+          description: The API refuses a health claim.
         trackSlug:
           type: string
         startSecond:
           type: number
           minimum: 0
+        durationSeconds:
+          type: number
+          exclusiveMinimum: 0
         format:
           $ref: "#/components/schemas/Format"
         labelDecision:
@@ -314,8 +435,54 @@ components:
         approvedAt:
           type: string
           format: date-time
+    Asset:
+      type: object
+      required: [id, kind, filePath, isApproved]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [still, clip]
+        parentAssetId:
+          type: string
+        filePath:
+          type: string
+        isApproved:
+          type: boolean
+    Health:
+      type: object
+      required: [isUp, schemaVersion, isWorkerBusy]
+      properties:
+        isUp:
+          type: boolean
+        schemaVersion:
+          type: integer
+        isWorkerBusy:
+          type: boolean
+    Job:
+      type: object
+      required: [id, kind, status]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [render, asset, send]
+        episodeId:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed]
+        message:
+          type: string
+          description: Plain words on failure.
+        createdAt:
+          type: string
+          format: date-time
     Connection:
       type: object
+      description: Derived from the token files. Not stored.
       required: [platform, isConnected, environment, scopes]
       properties:
         platform:
@@ -332,6 +499,7 @@ components:
             type: string
     Publish:
       type: object
+      description: One row per episode and platform. Written at TikTok init.
       required: [id, episodeId, platform, status, attempts]
       properties:
         id:
@@ -343,9 +511,10 @@ components:
           enum: [tiktok, youtube]
         externalId:
           type: string
+          description: The TikTok publish_id.
         status:
           type: string
-          enum: [queued, processing, delivered, stalled, failed]
+          enum: [processing, sent, stalled, failed]
         attempts:
           type: integer
         lastCheckedAt:

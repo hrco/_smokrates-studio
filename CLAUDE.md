@@ -1,6 +1,6 @@
 # _smokrates-studio
 
-Automated Smokrates TikTok studio: renders 1-3 vertical motion videos a day from smok-studio tracks and art; phase 2 adds Pulsu Studio
+Automated Smokrates TikTok studio: renders at most one vertical motion video a day from smok-studio tracks and art; phase 2 adds Pulsu Studio
 
 ## Commands
 - install: `npm install`

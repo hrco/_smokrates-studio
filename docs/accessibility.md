@@ -2,7 +2,7 @@
 
 Target: WCAG 2.2 level AA, applied to the DNP XIII design system. The review page is local and has one user. The bar is the same as for a public site.
 
-DNP XIII is in https://claude.ai/artifact/YNcLF1gPzaPmo2gDqZMYpR. The page loads its tokens.css and components bundle, copied into the repo at build.
+DNP XIII is in https://claude.ai/artifact/YNcLF1gPzaPmo2gDqZMYpR. The repo holds a vendored copy of its tokens.css and components bundle. The page never loads a claude.ai artifact URL at run time.
 
 ## Features
 

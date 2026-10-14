@@ -19,7 +19,7 @@ The studio uploads a rendered video to your TikTok inbox as a draft. It never po
 ## Authorize once
 1. Run `npm run tiktok:auth`.
 2. Approve the request in the browser that opens.
-3. Tokens are saved to `.tiktok/tokens.json` (git-ignored, mode 0600).
+3. Tokens are saved to `.tiktok/tokens.sandbox.json` or `.tiktok/tokens.production.json`, by environment (git-ignored, mode 0600).
 4. The refresh token lasts about a year. Run the auth step again when it expires.
 
 ## Upload a draft
@@ -44,15 +44,15 @@ Drafts land in the TikTok inbox. They carry no caption.
 
 ## Public site
 TikTok needs a website, terms and privacy URL on a domain you can verify. The static site in `site/` serves them from the Oracle box. Follow this order:
-1. At Hostinger, add an A record: `nopanicpost` -> `92.5.184.225`. Check it with `scripts/deploy-site.sh check`.
-2. Run `npm run deploy:site`. You run it, not an agent: it publishes the site.
+1. At Hostinger, add an A record: `nopanicpost` -> the IP of the Oracle box. Set `VPS_HOST` to that IP in your shell. The deploy script fails without it. Check the record with `VPS_HOST=<box ip> scripts/deploy-site.sh check`.
+2. Run `VPS_HOST=<box ip> npm run deploy:site`. You run it, not an agent: it publishes the site.
 3. Enter the URLs in the TikTok developer portal:
    - Website: `https://nopanicpost.donotpanic.space/`
    - Terms of Service: `https://nopanicpost.donotpanic.space/terms/`
    - Privacy Policy: `https://nopanicpost.donotpanic.space/privacy/`
 4. Verify the domain in the portal, with one of:
    - a DNS TXT record at Hostinger, or
-   - a signature file: download it from the portal, then run `scripts/deploy-site.sh verify-file <path-to-tiktok-file>.txt`.
+   - a signature file: download it from the portal, then run `VPS_HOST=<box ip> scripts/deploy-site.sh verify-file <path-to-tiktok-file>.txt`.
 
 ## Sandbox test result (14 October 2026)
 
