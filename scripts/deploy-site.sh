@@ -12,7 +12,7 @@ SITE_HOST="nopanicpost.donotpanic.space"
 SITE_NAME="nopanicpost-public"
 REMOTE_ROOT="/srv/sites/nopanicpost"
 CADDY_FILE="/etc/caddy/previews/$SITE_NAME.caddy"
-HOST="${VPS_HOST:-92.5.184.225}"
+HOST="${VPS_HOST:?Set VPS_HOST to the Oracle box address, for example: VPS_HOST=<box ip> scripts/deploy-site.sh deploy}"
 USER_="${VPS_SSH_USER:-ubuntu}"
 KEY="${VPS_SSH_KEY:-$HOME/.ssh/oracle-vps.key}"; KEY="${KEY/#\~/$HOME}"
 SSH_OPTS=(-i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8)
