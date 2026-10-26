@@ -31,7 +31,7 @@ npm run typecheck && npm test && bash scripts/check-docs.sh
 - npm only. `.env` ignored, `.env.example` committed.
 - Stack: Node 22 + TypeScript + Remotion 4 (bundled ffmpeg, no system ffmpeg).
 - Assets are read-only from `~/Studio/Smokrates` (the smok-studio repo) via `SMOK_STUDIO_DIR`. Never write there. The render script copies cover/audio into ignored `public/media/<slug>/`.
-- Generated stills and clips come from the Grok CLI (SuperGrok flat fee; `image_gen`/`image_edit` tools, video tool name still to verify) into ignored `assets/generated/`.
+- Generated stills and clips come from the Grok CLI (SuperGrok flat fee; `image_edit` for stills, `reference_to_video` for clips at 720p max; clips carry sound, so compositions mute them) into ignored `assets/generated/`. Evidence: `docs/research/grok-day1-test.md`.
 - Agents never upload or publish. They make drafts; the human taps publish.
 - Label AI content on TikTok (`aiGenerated: true` in the sidecar JSON).
 - One 9:16 master, hook in frame 1, something new every post. See `docs/research/reports`.
