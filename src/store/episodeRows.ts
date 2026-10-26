@@ -84,3 +84,11 @@ export function isEpisodeSent(db: DatabaseSync, episodeId: string): boolean {
 export function hasRender(db: DatabaseSync, episodeId: string): boolean {
   return db.prepare('SELECT 1 AS found FROM renders WHERE episode_id = ? LIMIT 1').get(episodeId) !== undefined;
 }
+
+/** Path of the newest render of an episode, as stored: relative to the project root, or absolute. */
+export function readLatestRenderPath(db: DatabaseSync, episodeId: string): string | undefined {
+  const row = db
+    .prepare('SELECT file_path FROM renders WHERE episode_id = ? ORDER BY created_at_ms DESC, rowid DESC LIMIT 1')
+    .get(episodeId);
+  return row === undefined ? undefined : readString(row, 'file_path');
+}
