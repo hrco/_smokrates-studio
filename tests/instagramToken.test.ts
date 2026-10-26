@@ -1,4 +1,4 @@
-import {mkdtemp, rm, stat} from 'node:fs/promises';
+import {mkdtemp, rm, stat, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {describe, expect, it, vi} from 'vitest';
@@ -45,6 +45,24 @@ describe('resolveAccessToken', () => {
 
   it('flags a file token that expires within 7 days', async () => {
     const store = memoryStore({accessToken: 'file-tok', expiresAt: new Date(nowMs + 6 * dayMs).toISOString()});
+    const result = await resolveAccessToken(store, {}, nowMs);
+    expect(result.ok && result.value.isExpiringSoon).toBe(true);
+  });
+
+  it('does not flag a token that expires in exactly 7 days', async () => {
+    const store = memoryStore({accessToken: 'file-tok', expiresAt: new Date(nowMs + 7 * dayMs).toISOString()});
+    const result = await resolveAccessToken(store, {}, nowMs);
+    expect(result.ok && result.value.isExpiringSoon).toBe(false);
+  });
+
+  it('flags a token one millisecond inside the 7 day window', async () => {
+    const store = memoryStore({accessToken: 'file-tok', expiresAt: new Date(nowMs + 7 * dayMs - 1).toISOString()});
+    const result = await resolveAccessToken(store, {}, nowMs);
+    expect(result.ok && result.value.isExpiringSoon).toBe(true);
+  });
+
+  it('flags a token that is already expired', async () => {
+    const store = memoryStore({accessToken: 'file-tok', expiresAt: new Date(nowMs - 1000).toISOString()});
     const result = await resolveAccessToken(store, {}, nowMs);
     expect(result.ok && result.value.isExpiringSoon).toBe(true);
   });
@@ -133,6 +151,17 @@ describe('createFileTokenStore', () => {
       await store.save(token);
       expect(await store.load()).toEqual(token);
       expect((await stat(tokenPath)).mode & 0o777).toBe(0o600);
+    } finally {
+      await rm(folder, {recursive: true});
+    }
+  });
+
+  it('throws when the file has an unexpected shape', async () => {
+    const folder = await mkdtemp(path.join(os.tmpdir(), 'ig-token-'));
+    try {
+      const tokenPath = path.join(folder, 'token.json');
+      await writeFile(tokenPath, '{"accessToken":"tok"}\n');
+      await expect(createFileTokenStore(tokenPath).load()).rejects.toThrow(/unexpected shape/);
     } finally {
       await rm(folder, {recursive: true});
     }

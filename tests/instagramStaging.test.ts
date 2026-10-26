@@ -1,6 +1,8 @@
+import {homedir} from 'node:os';
 import {describe, expect, it, vi} from 'vitest';
 import {
   checkUrlReachable,
+  createExecFileRunner,
   readStagingConfig,
   stageVideo,
   unstageVideo,
@@ -60,6 +62,20 @@ describe('stageVideo', () => {
       },
     });
     expect(runner.calls).toHaveLength(2);
+  });
+
+  it('stops after a chmod failure and names the staged file', async () => {
+    const runner = fakeRunner({exitCode: 0, stderr: ''}, {exitCode: 0, stderr: ''}, {exitCode: 1, stderr: 'chmod: denied'});
+    const result = await stageVideo({localPath: 'out/a.mp4', config}, runner, remoteName);
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        operation: 'stage-video',
+        code: 'ssh-failed',
+        detail: `ssh exited 1: chmod: denied (staged file ${remoteName})`,
+      },
+    });
+    expect(runner.calls).toHaveLength(3);
   });
 
   it('rejects a bad name before running anything', async () => {
@@ -136,6 +152,15 @@ describe('checkUrlReachable', () => {
     const result = await checkUrlReachable(input, fetchFn);
     expect(!result.ok && result.error.code).toBe('request-failed');
   });
+
+  it('maps a non-Error rejection', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockRejectedValue('boom');
+    const result = await checkUrlReachable(input, fetchFn);
+    expect(result).toEqual({
+      ok: false,
+      error: {operation: 'check-url-reachable', code: 'request-failed', detail: `request failed (${input.publicUrl})`},
+    });
+  });
 });
 
 describe('readStagingConfig', () => {
@@ -154,5 +179,41 @@ describe('readStagingConfig', () => {
   it('rejects a host that could be read as an ssh option', () => {
     const result = readStagingConfig({VPS_HOST: '-oProxyCommand=x y'});
     expect(!result.ok && result.error.code).toBe('bad-host');
+  });
+
+  it('rejects a user name that is not a plain account', () => {
+    const result = readStagingConfig({VPS_HOST: '203.0.113.7', VPS_SSH_USER: 'ubuntu;rm'});
+    expect(!result.ok && result.error.code).toBe('bad-user');
+  });
+
+  it('treats an empty user as the default', () => {
+    const result = readStagingConfig({VPS_HOST: 'box.example', VPS_SSH_USER: ''});
+    expect(result.ok && result.value.user).toBe('ubuntu');
+  });
+
+  it('uses an explicit user and expands a tilde key path', () => {
+    const result = readStagingConfig({VPS_HOST: '203.0.113.7', VPS_SSH_USER: 'deploy', VPS_SSH_KEY: '~/keys/ig'});
+    expect(result.ok && result.value).toEqual({host: '203.0.113.7', user: 'deploy', keyPath: `${homedir()}/keys/ig`});
+  });
+});
+
+describe('createExecFileRunner', () => {
+  const runner = createExecFileRunner();
+
+  it('resolves a zero exit', async () => {
+    const outcome = await runner.run(process.execPath, ['-e', 'process.exit(0)']);
+    expect(outcome.exitCode).toBe(0);
+  });
+
+  it('keeps a numeric exit code and stderr', async () => {
+    const outcome = await runner.run(process.execPath, ['-e', 'console.error("nope"); process.exit(7)']);
+    expect(outcome.exitCode).toBe(7);
+    expect(outcome.stderr).toContain('nope');
+  });
+
+  it('maps a missing program to exit code 1', async () => {
+    const outcome = await runner.run('definitely-not-a-program-xyz', []);
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.stderr.length).toBeGreaterThan(0);
   });
 });

@@ -74,6 +74,20 @@ describe('createReelContainer', () => {
     });
   });
 
+  it('keeps &, = and line breaks inside the caption field', async () => {
+    const caption = 'a & b=c\n#smokrates';
+    const fetchFn = fetchReturning(jsonResponse({id: 'c1'}));
+    await createReelContainer({...input, caption}, fetchFn);
+    const params = new URLSearchParams(String(requestOf(fetchFn).init.body));
+    expect(params.get('caption')).toBe(caption);
+    expect([...params.keys()]).toEqual(['media_type', 'video_url', 'caption', 'share_to_feed']);
+  });
+
+  it('fails when the status is not ok and the JSON body has no error field', async () => {
+    const result = await createReelContainer(input, fetchReturning(jsonResponse({unexpected: true}, 500)));
+    expect(!result.ok && result.error.code).toBe('http-error');
+  });
+
   it('maps a Graph error', async () => {
     const result = await createReelContainer(input, fetchReturning(jsonResponse(graphError, 400)));
     expect(!result.ok && result.error.code).toBe('190');
