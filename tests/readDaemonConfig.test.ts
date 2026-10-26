@@ -13,7 +13,21 @@ describe('readDaemonConfig', () => {
     expect(result).toEqual({ok: true, config: {port: 9000, dbPath: path.resolve('tmp/test.db')}});
   });
 
-  it.each(['abc', '0', '70000', '12.5', '-1'])('refuses the port %s and names it', (port) => {
+  it('treats an empty port or database path as the default', () => {
+    expect(readDaemonConfig({STUDIO_PORT: '', STUDIO_DB_PATH: ''})).toEqual({
+      ok: true,
+      config: {port: 8724, dbPath: DEFAULT_STUDIO_DB_PATH},
+    });
+  });
+
+  it.each([1, 65535])('accepts port %s', (port) => {
+    expect(readDaemonConfig({STUDIO_PORT: String(port)})).toEqual({
+      ok: true,
+      config: {port, dbPath: DEFAULT_STUDIO_DB_PATH},
+    });
+  });
+
+  it.each(['abc', '0', '65536', '70000', '12.5', '-1'])('refuses the port %s and names it', (port) => {
     const result = readDaemonConfig({STUDIO_PORT: port});
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain(`"${port}"`);

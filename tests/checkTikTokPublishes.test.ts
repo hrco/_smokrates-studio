@@ -116,6 +116,18 @@ describe('checkTikTokPublishes', () => {
     expect(readStatus(db)).toBe('stalled');
   });
 
+  it('leaves a YouTube row alone and does not fetch it', async () => {
+    const db = openDbWithProcessingRow('pub-1');
+    db.prepare("UPDATE publishes SET platform = 'youtube' WHERE id = 'row-1'").run();
+    const fetchStatus = vi.fn();
+
+    const summary = await checkTikTokPublishes({db, nowMs: CREATED_AT_MS + 31 * MINUTE_MS, fetchStatus});
+
+    expect(summary).toEqual({sent: 0, failed: 0, stalled: 0, stillProcessing: 0, statusErrors: []});
+    expect(readStatus(db)).toBe('processing');
+    expect(fetchStatus).not.toHaveBeenCalled();
+  });
+
   it('keeps a young row processing on a fetch error', async () => {
     const db = openDbWithProcessingRow('pub-1');
     const error = {operation: 'fetch-publish-status', code: 'rate_limit_exceeded', detail: 'slow down'};

@@ -280,6 +280,24 @@ describe('publishes.list', () => {
     expect(JSON.parse((await send({path: '/api/publishes?weekStart=2026-11-02'})).body)).toEqual([]);
     expect((await send({path: '/api/publishes'})).status).toBe(400);
   });
+
+  it('lists the older row first and omits a missing external id and check time', async () => {
+    await importWeek();
+    const insert = sandbox.db.prepare(
+      `INSERT INTO publishes (id, episode_id, platform, status, attempts, created_at_ms)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    insert.run('p-new', 'ep-2', 'youtube', 'processing', 1, 2);
+    insert.run('p-old', 'ep-1', 'tiktok', 'failed', 2, 1);
+
+    const reply = await send({path: '/api/publishes?weekStart=2026-10-26'});
+
+    expect(reply.status).toBe(200);
+    expect(JSON.parse(reply.body)).toEqual([
+      {id: 'p-old', episodeId: 'ep-1', platform: 'tiktok', status: 'failed', attempts: 2},
+      {id: 'p-new', episodeId: 'ep-2', platform: 'youtube', status: 'processing', attempts: 1},
+    ]);
+  });
 });
 
 describe('request guards', () => {
@@ -287,6 +305,12 @@ describe('request guards', () => {
     expect((await send({path: '/api/health', headers: {Host: 'evil.example'}})).status).toBe(421);
     expect((await send({path: '/api/health', headers: {Host: '127.0.0.1:1'}})).status).toBe(421);
     expect((await send({path: '/api/health', headers: {Host: `localhost:${sandbox.port}`}})).status).toBe(200);
+  });
+
+  it('refuses a Host header that only looks like loopback', async () => {
+    expect((await send({path: '/api/health', headers: {Host: `127.0.0.1.evil.test:${sandbox.port}`}})).status).toBe(421);
+    expect((await send({path: '/api/health', headers: {Host: `not127.0.0.1:${sandbox.port}`}})).status).toBe(421);
+    expect((await send({path: '/api/health', headers: {Host: '127.0.0.1'}})).status).toBe(421);
   });
 
   it('refuses a cross-origin POST and allows the same origin and no origin', async () => {
@@ -398,6 +422,13 @@ describe('media', () => {
     expect([tail.status, tail.body]).toEqual([206, 'fghij']);
     const suffix = await send({path: '/media/ep-1.mp4', headers: {Range: 'bytes=-3'}});
     expect([suffix.status, suffix.body]).toEqual([206, 'hij']);
+
+    const longSuffix = await send({path: '/media/ep-1.mp4', headers: {Range: 'bytes=-100'}});
+    expect([longSuffix.status, longSuffix.body, longSuffix.headers['content-range']]).toEqual([
+      206,
+      VIDEO_BYTES.toString(),
+      'bytes 0-19/20',
+    ]);
   });
 
   it('answers 416 for a range past the end', async () => {
