@@ -73,12 +73,9 @@ export function readPlan(db: DatabaseSync, weekStart: string): Plan | undefined 
   };
 }
 
-/** True when a TikTok publish row for the episode has status sent. A sent night is frozen. */
-export function isEpisodeSent(db: DatabaseSync, episodeId: string): boolean {
-  const row = db
-    .prepare("SELECT 1 AS found FROM publishes WHERE episode_id = ? AND platform = 'tiktok' AND status = 'sent'")
-    .get(episodeId);
-  return row !== undefined;
+/** True when the episode has a publish row on any platform, in any status. Such a night is frozen. */
+export function hasPublishRow(db: DatabaseSync, episodeId: string): boolean {
+  return db.prepare('SELECT 1 AS found FROM publishes WHERE episode_id = ? LIMIT 1').get(episodeId) !== undefined;
 }
 
 export function hasRender(db: DatabaseSync, episodeId: string): boolean {

@@ -55,11 +55,11 @@ function addRender(db: DatabaseSync, episodeId: string, createdAtMs = 1): void {
   db.prepare("UPDATE episodes SET status = 'ready' WHERE id = ?").run(episodeId);
 }
 
-function addSentPublish(db: DatabaseSync, episodeId: string): void {
+function addSentPublish(db: DatabaseSync, episodeId: string, status = 'sent'): void {
   db.prepare(
     `INSERT INTO publishes (id, episode_id, platform, status, created_at_ms)
-     VALUES (?, ?, 'tiktok', 'sent', 1)`,
-  ).run(`pub-${episodeId}`, episodeId);
+     VALUES (?, ?, 'tiktok', ?, 1)`,
+  ).run(`pub-${episodeId}`, episodeId, status);
 }
 
 function requirePlan(db: DatabaseSync): Plan {
@@ -201,6 +201,15 @@ describe('updateEpisode', () => {
     });
   });
 
+  it.each(['processing', 'stalled', 'failed'])('refuses a night whose publish row is %s', (status) => {
+    addSentPublish(db, 'ep-1', status);
+    addRender(db, 'ep-1');
+    expect(updateEpisode(db, {episodeId: 'ep-1', update: {startSecond: 30}, nowMs: NOW_MS})).toEqual({
+      kind: 'already-sent',
+    });
+    expect(requirePlan(db).episodes[0]?.renderPath).toBe('out/ep-1-1.mp4');
+  });
+
   it('names an unknown episode', () => {
     expect(updateEpisode(db, {episodeId: 'nope', update: {caption: 'x'}, nowMs: NOW_MS})).toEqual({
       kind: 'not-found',
@@ -234,6 +243,12 @@ describe('approveEpisode', () => {
     expect(result.kind === 'approved' && result.episode.status).toBe('approved');
   });
 
+  it('refuses a night that is not new', () => {
+    addRender(db, 'ep-1');
+    db.prepare("UPDATE episodes SET status = 'not_new' WHERE id = 'ep-1'").run();
+    expect(approveEpisode(db, {episodeId: 'ep-1'})).toEqual({kind: 'not-new', night: 1});
+  });
+
   it('refuses a skipped night and an unknown one', () => {
     addRender(db, 'ep-1');
     skipEpisode(db, {episodeId: 'ep-1'});
@@ -256,6 +271,11 @@ describe('skipEpisode', () => {
     addSentPublish(db, 'ep-2');
     expect(skipEpisode(db, {episodeId: 'ep-2'})).toEqual({kind: 'already-sent'});
     expect(requirePlan(db).episodes[1]?.status).toBe('planned');
+  });
+
+  it('refuses a night whose publish row is processing', () => {
+    addSentPublish(db, 'ep-2', 'processing');
+    expect(skipEpisode(db, {episodeId: 'ep-2'})).toEqual({kind: 'already-sent'});
   });
 
   it('names an unknown episode', () => {

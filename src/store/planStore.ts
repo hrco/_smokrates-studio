@@ -1,5 +1,5 @@
 import type {DatabaseSync} from 'node:sqlite';
-import {hasRender, isEpisodeSent, readEpisode, readPlan} from './episodeRows';
+import {hasRender, hasPublishRow, readEpisode, readPlan} from './episodeRows';
 import type {Episode, EpisodeInput, EpisodeUpdate, Plan, PlanImport} from './planTypes';
 import {runInTransaction} from './withTransaction';
 
@@ -22,6 +22,7 @@ export type ApproveEpisodeResult =
   | {kind: 'approved'; episode: Episode}
   | {kind: 'not-found'}
   | {kind: 'is-skipped'}
+  | {kind: 'not-new'; night: number}
   | {kind: 'not-rendered'};
 
 export type SkipEpisodeResult =
@@ -159,7 +160,7 @@ function clearRender(db: DatabaseSync, episodeId: string): void {
 }
 
 /**
- * Changes fields of one night. Refuses a sent night and a time that is not in the future.
+ * Changes fields of one night. Refuses a night with a publish row (it is with the platform) and a time that is not in the future.
  * A change to track, start second, duration or format clears the render, because the old video no
  * longer matches. The caller has validated the values at the boundary.
  */
@@ -171,7 +172,7 @@ export function updateEpisode(
   return runInTransaction(db, `update-episode ${episodeId}`, () => {
     const current = readEpisode(db, episodeId);
     if (current === undefined) return {kind: 'not-found'};
-    if (isEpisodeSent(db, episodeId)) return {kind: 'already-sent'};
+    if (hasPublishRow(db, episodeId)) return {kind: 'already-sent'};
     if (update.publishAtMs !== undefined && update.publishAtMs <= nowMs) return {kind: 'time-in-past'};
 
     const shouldClearRender = changesRenderInput(current, update);
@@ -194,6 +195,7 @@ export function approveEpisode(db: DatabaseSync, options: {episodeId: string}): 
     const current = readEpisode(db, episodeId);
     if (current === undefined) return {kind: 'not-found'};
     if (current.status === 'skipped') return {kind: 'is-skipped'};
+    if (current.status === 'not_new') return {kind: 'not-new', night: current.night};
     if (!hasRender(db, episodeId)) return {kind: 'not-rendered'};
 
     db.prepare("UPDATE episodes SET status = 'approved' WHERE id = ?").run(episodeId);
@@ -201,12 +203,12 @@ export function approveEpisode(db: DatabaseSync, options: {episodeId: string}): 
   });
 }
 
-/** Skips one night so it is never sent. Refuses a night that is already sent. */
+/** Skips one night so it is never sent. Refuses a night that has a publish row. */
 export function skipEpisode(db: DatabaseSync, options: {episodeId: string}): SkipEpisodeResult {
   const {episodeId} = options;
   return runInTransaction(db, `skip-episode ${episodeId}`, () => {
     if (readEpisode(db, episodeId) === undefined) return {kind: 'not-found'};
-    if (isEpisodeSent(db, episodeId)) return {kind: 'already-sent'};
+    if (hasPublishRow(db, episodeId)) return {kind: 'already-sent'};
 
     db.prepare("UPDATE episodes SET status = 'skipped' WHERE id = ?").run(episodeId);
     return {kind: 'skipped', episode: requireEpisode(db, episodeId)};

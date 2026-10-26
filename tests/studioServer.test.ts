@@ -1,3 +1,4 @@
+import {existsSync} from 'node:fs';
 import {mkdir, mkdtemp, rm, symlink, writeFile} from 'node:fs/promises';
 import {request, type Server} from 'node:http';
 import type {AddressInfo} from 'node:net';
@@ -5,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type {DatabaseSync} from 'node:sqlite';
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
+import {lookUpStaticFile} from '../src/daemon/serveStatic';
 import {createStudioServer} from '../src/daemon/studioServer';
 import {openStudioDb} from '../src/store/studioDb';
 
@@ -31,7 +33,7 @@ async function startSandbox(): Promise<Sandbox> {
   await mkdir(path.join(webDir, 'vendor/dnp-xiii'), {recursive: true});
   await mkdir(outDir, {recursive: true});
   await writeFile(path.join(webDir, 'review/index.html'), '<!doctype html><title>Week</title>');
-  await writeFile(path.join(webDir, 'review/review.js'), 'export {};');
+  await writeFile(path.join(webDir, 'review.js'), 'export {};');
   await writeFile(path.join(webDir, 'review/review.css'), 'body{}');
   await writeFile(path.join(webDir, 'vendor/dnp-xiii/tokens.css'), ':root{}');
   await writeFile(path.join(rootDir, 'secret.txt'), 'top secret');
@@ -232,6 +234,14 @@ describe('episode routes', () => {
     expect(JSON.parse(approved.body).status).toBe('approved');
   });
 
+  it('episode.approve refuses a night that is not new', async () => {
+    addRender('ep-1');
+    sandbox.db.prepare("UPDATE episodes SET status = 'not_new' WHERE id = 'ep-1'").run();
+    const reply = await send({method: 'POST', path: '/api/episodes/ep-1/approve'});
+    expect(reply.status).toBe(409);
+    expect(JSON.parse(reply.body)).toMatchObject({code: 'not_new', message: 'Night 1 is not new. Change it or skip it.'});
+  });
+
   it('episode.skip skips, and refuses a sent night', async () => {
     const skipped = await send({method: 'POST', path: '/api/episodes/ep-1/skip'});
     expect(JSON.parse(skipped.body).status).toBe('skipped');
@@ -241,7 +251,7 @@ describe('episode routes', () => {
       .run();
     const sent = await send({method: 'POST', path: '/api/episodes/ep-2/skip'});
     expect(sent.status).toBe(409);
-    expect(JSON.parse(sent.body).message).toBe('This night is already sent and cannot be skipped.');
+    expect(JSON.parse(sent.body).message).toBe('This night is already with TikTok and cannot be skipped.');
   });
 });
 
@@ -350,6 +360,17 @@ describe('static files', () => {
   it('answers 404 for a path outside the allowed set', async () => {
     expect((await send({path: '/package.json'})).status).toBe(404);
     expect((await send({path: '/vendor/dnp-xiii/missing.css'})).status).toBe(404);
+  });
+});
+
+describe('page files', () => {
+  it('every page file the server maps exists in the real web folder', () => {
+    const realWebDir = path.resolve(__dirname, '../web');
+    for (const urlPath of ['/', '/review.js', '/review.css']) {
+      const lookup = lookUpStaticFile(urlPath, realWebDir);
+      if (lookup.kind !== 'file') throw new Error(`${urlPath} is not mapped`);
+      expect(existsSync(path.join(lookup.rootDir, lookup.relativePath)), urlPath).toBe(true);
+    }
   });
 });
 

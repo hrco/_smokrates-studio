@@ -15,7 +15,7 @@ All dates and times use the Europe/Ljubljana timezone. This covers weekStart and
 | `week.approve` | POST /api/plans/{weekStart}/approve | Creator | plans, episodes, renders | plans, episodes | "Night 3 is not rendered. Render it or skip it." The week stays a draft. |
 | `episode.update` | PATCH /api/episodes/{episodeId} | Creator | episodes | episodes | "That time is in the past." or "That caption makes a health claim." The typed value stays. The caption and prompt validator runs here. |
 | `episode.approve` | POST /api/episodes/{episodeId}/approve | Creator | episodes, renders | episodes | "Render this night before you approve it." |
-| `episode.skip` | POST /api/episodes/{episodeId}/skip | Creator | episodes | episodes | "This night is already sent and cannot be skipped." |
+| `episode.skip` | POST /api/episodes/{episodeId}/skip | Creator | episodes | episodes | "This night is already with TikTok and cannot be skipped." |
 | `episode.render` | POST /api/episodes/{episodeId}/render | Creator | episodes, assets | jobs | "Another render or asset run is busy. Try again soon." The old render stays. Returns 202 and a job id. |
 | `job.get` | GET /api/jobs/{jobId} | Creator | jobs | nothing | "Could not read the job." The panel keeps its last state. |
 | `canon.get` | GET /api/canon | Creator, Admin | canon, assets | nothing | "No canonical still yet." |
@@ -57,6 +57,8 @@ Publish state is per platform, in publishes. A publish status is one of: process
 A render is keyed by episode id. The output is `out/<episodeId>.mp4`. The staging folder is `public/media/<episodeId>/`. An episode has its own duration in seconds. Two episodes with the same track never share a path.
 
 An asset of kind clip has a parent asset that is a still. An asset of kind still has a parent that is the canon or another still. In week 1 the originality guard is the Creator's Skip. Later it compares a hash of still, track, start second and duration with earlier publishes.
+
+A night with any publish row, in any status, is frozen: it cannot be changed or skipped, and no render is attached to it. An approve of a night that is not new is refused.
 
 A week approve skips the skipped nights. It stops at the first night, in night order, that is not rendered or is marked not new, and changes nothing. A replace import never deletes a week that has a publish row.
 

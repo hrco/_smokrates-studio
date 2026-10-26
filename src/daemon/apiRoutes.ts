@@ -129,7 +129,7 @@ async function handleUpdateEpisode({deps, req, res, param}: RouteContext): Promi
   if (result.kind === 'time-in-past') {
     return sendError(res, 422, {code: 'time_in_past', field: 'publishAt', message: 'That time is in the past.'});
   }
-  sendError(res, 409, {code: 'already_sent', message: 'This night is already sent and cannot be changed.'});
+  sendError(res, 409, {code: 'already_sent', message: 'This night is already with TikTok and cannot be changed.'});
 }
 
 function handleApproveEpisode({deps, res, param}: RouteContext): void {
@@ -139,6 +139,9 @@ function handleApproveEpisode({deps, res, param}: RouteContext): void {
   if (result.kind === 'is-skipped') {
     return sendError(res, 409, {code: 'is_skipped', message: 'This night is skipped. It cannot be approved.'});
   }
+  if (result.kind === 'not-new') {
+    return sendError(res, 409, {code: 'not_new', message: `Night ${result.night} is not new. Change it or skip it.`});
+  }
   sendError(res, 409, {code: 'not_rendered', message: 'Render this night before you approve it.'});
 }
 
@@ -146,7 +149,7 @@ function handleSkipEpisode({deps, res, param}: RouteContext): void {
   const result = skipEpisode(deps.db, {episodeId: param});
   if (result.kind === 'skipped') return sendJson(res, 200, result.episode);
   if (result.kind === 'not-found') return sendNoEpisode(res);
-  sendError(res, 409, {code: 'already_sent', message: 'This night is already sent and cannot be skipped.'});
+  sendError(res, 409, {code: 'already_sent', message: 'This night is already with TikTok and cannot be skipped.'});
 }
 
 const ROUTES: readonly Route[] = [

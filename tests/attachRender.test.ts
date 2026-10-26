@@ -68,6 +68,21 @@ describe('attachRender', () => {
     });
   });
 
+  it('refuses a night that has a publish row and writes nothing', () => {
+    const db = seedEpisode();
+    db.prepare("INSERT INTO publishes (id, episode_id, platform, status, created_at_ms) VALUES ('p', 'ep-1', 'tiktok', 'processing', 1)").run();
+    const result = attachRender(db, {
+      episodeId: 'ep-1',
+      filePath: 'out/ep-1.mp4',
+      durationSeconds: 15,
+      frameCount: 450,
+      nowMs: 5,
+      newId: () => 'render-1',
+    });
+    expect(result).toEqual({kind: 'already-sent'});
+    expect(db.prepare('SELECT COUNT(*) AS count FROM renders').get()).toEqual({count: 0});
+  });
+
   it('names an unknown episode and writes nothing', () => {
     const db = seedEpisode();
     const result = attachRender(db, {

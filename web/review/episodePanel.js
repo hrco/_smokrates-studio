@@ -117,7 +117,7 @@ export function createEpisodePanel({episode, isSent, callApi, announce, onEpisod
   function renderEpisode() {
     const status = STATUS_WORDS[current.status];
     statusTag.className = status.className;
-    statusTag.textContent = isSentNight ? `${status.word}, sent` : status.word;
+    statusTag.textContent = isSentNight ? `${status.word}, with TikTok` : status.word;
     title.textContent = `Night ${night}: ${current.trackSlug}`;
     onScreenText.textContent = current.caption;
     onScreenText.setAttribute('aria-label', 'On-screen text');

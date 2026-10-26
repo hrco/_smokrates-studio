@@ -55,6 +55,9 @@ async function main(): Promise<void> {
       newId: () => randomUUID(),
     });
     if (result.kind === 'not-found') exitWithError(`no episode with id ${parsed.args.episodeId}`);
+    if (result.kind === 'already-sent') {
+      exitWithError(`episode ${parsed.args.episodeId} already has a publish row, so it is frozen and takes no new render`);
+    }
     console.log(`attached ${path.relative(PROJECT_ROOT, absolutePath)} to ${parsed.args.episodeId}; status ready`);
   } finally {
     db.close();

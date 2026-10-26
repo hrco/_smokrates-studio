@@ -1,11 +1,13 @@
 import type {DatabaseSync} from 'node:sqlite';
+import {hasPublishRow} from './episodeRows';
 import {runInTransaction} from './withTransaction';
 
-export type AttachRenderResult = {kind: 'attached'; renderId: string} | {kind: 'not-found'};
+export type AttachRenderResult = {kind: 'attached'; renderId: string} | {kind: 'not-found'}
+  | {kind: 'already-sent'};
 
 /**
  * Records a finished render for an episode and marks the night ready. The file path is stored relative
- * to the project root, such as out/ep-1.mp4. A skipped night stays skipped. Any other status becomes
+ * to the project root, such as out/ep-1.mp4. Refuses a night that has a publish row. A skipped night stays skipped. Any other status becomes
  * ready, so a new render must be approved again.
  */
 export function attachRender(
@@ -23,6 +25,7 @@ export function attachRender(
   return runInTransaction(db, `attach-render ${episodeId}`, () => {
     const episode = db.prepare('SELECT 1 AS found FROM episodes WHERE id = ?').get(episodeId);
     if (episode === undefined) return {kind: 'not-found'};
+    if (hasPublishRow(db, episodeId)) return {kind: 'already-sent'};
 
     const renderId = newId();
     db.prepare(

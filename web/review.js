@@ -70,7 +70,7 @@ async function loadPublishes(plan) {
   page.publishList.replaceChildren(
     ...(publishes.length === 0 ? [el('li', {text: 'Nothing sent yet.'})] : publishes.map((p) => buildPublishLine(p, nightByEpisodeId))),
   );
-  return new Set(publishes.filter((publish) => publish.status === 'sent').map((publish) => publish.episodeId));
+  return new Set(publishes.map((publish) => publish.episodeId));
 }
 
 function replaceEpisode(changedEpisode) {

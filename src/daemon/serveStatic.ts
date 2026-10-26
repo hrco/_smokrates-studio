@@ -12,7 +12,7 @@ const STATIC_FOLDERS: ReadonlyArray<{urlPrefix: string; folder: string}> = [
 
 const PAGE_FILES: Readonly<Record<string, string>> = {
   '/': 'review/index.html',
-  '/review.js': 'review/review.js',
+  '/review.js': 'review.js',
   '/review.css': 'review/review.css',
 };
 
