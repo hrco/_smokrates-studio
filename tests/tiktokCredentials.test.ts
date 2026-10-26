@@ -31,4 +31,33 @@ describe('readTikTokCredentials', () => {
       missingNames: ['TIKTOK_CLIENT_SECRET'],
     });
   });
+
+  it('ignores empty sandbox placeholders and uses the production pair', () => {
+    const result = readTikTokCredentials({
+      TIKTOK_CLIENT_KEY: 'prod-key',
+      TIKTOK_CLIENT_SECRET: 'prod-secret',
+      TIKTOK_CLIENT_KEY_SANDBOX: '',
+      TIKTOK_CLIENT_SECRET_SANDBOX: '',
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        environment: 'production',
+        clientKey: 'prod-key',
+        clientSecret: 'prod-secret',
+        tokenFileName: 'tokens.production.json',
+      },
+    });
+  });
+
+  it('reports the production names when every credential value is empty', () => {
+    expect(
+      readTikTokCredentials({
+        TIKTOK_CLIENT_KEY: '',
+        TIKTOK_CLIENT_SECRET: '',
+        TIKTOK_CLIENT_KEY_SANDBOX: '',
+        TIKTOK_CLIENT_SECRET_SANDBOX: '',
+      }),
+    ).toEqual({ok: false, missingNames: ['TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET']});
+  });
 });
