@@ -83,14 +83,16 @@ afterEach(async () => {
 describe('tick.run', () => {
   it('returns 202 and the job id when a send starts', async () => {
     const sendEpisode = vi.fn<TickActions['sendEpisode']>(async () => ({kind: 'sent-to-tiktok', publishId: 'pub-1'}));
-    sandbox = await start({checkPublishes: idleCheck, sendEpisode});
+    const checkPublishes = vi.fn(idleCheck);
+    sandbox = await start({checkPublishes, sendEpisode});
     seedDueEpisode(sandbox.db);
 
     const reply = await send({path: '/api/tick'});
 
     expect(reply.status).toBe(202);
     expect(JSON.parse(reply.body)).toEqual({jobId: 'id-1'});
-    expect(sendEpisode).toHaveBeenCalledOnce();
+    expect(checkPublishes).toHaveBeenCalledWith(NOW_MS);
+    expect(sendEpisode).toHaveBeenCalledWith({episodeId: 'ep-1', nowMs: NOW_MS, newId: expect.any(Function)});
   });
 
   it('returns 200 idle when nothing is due', async () => {
@@ -182,6 +184,104 @@ describe('tick.run', () => {
 
     expect(reply.status).toBe(200);
     expect(JSON.parse(reply.body)).toEqual({status: 'idle', reason: 'tiktok-not-connected'});
+  });
+
+  it('returns 202 when the upload fails, and the job is failed rather than left running', async () => {
+    sandbox = await start({
+      checkPublishes: idleCheck,
+      sendEpisode: async () => ({
+        kind: 'upload-failed',
+        publishId: null,
+        error: {operation: 'init-inbox-upload', code: 'access_token_invalid', detail: 'bad'},
+      }),
+    });
+    seedDueEpisode(sandbox.db);
+
+    const reply = await send({path: '/api/tick'});
+
+    expect(reply.status).toBe(202);
+    expect(JSON.parse(reply.body)).toEqual({jobId: 'id-1'});
+    expect(sandbox.db.prepare('SELECT status, message FROM jobs WHERE id = ?').get('id-1')).toEqual({
+      status: 'failed',
+      message: 'TikTok upload failed (init-inbox-upload access_token_invalid).',
+    });
+  });
+
+  it('returns 202 when the send throws, and does not leave the job running', async () => {
+    sandbox = await start({
+      checkPublishes: idleCheck,
+      sendEpisode: async () => {
+        throw new Error('socket hang up');
+      },
+    });
+    seedDueEpisode(sandbox.db);
+
+    const reply = await send({path: '/api/tick'});
+
+    expect(reply.status).toBe(202);
+    expect(JSON.parse(reply.body)).toEqual({jobId: 'id-1'});
+    expect(sandbox.db.prepare('SELECT status, message FROM jobs WHERE id = ?').get('id-1')).toEqual({
+      status: 'failed',
+      message: 'socket hang up',
+    });
+  });
+
+  it('returns 200 already-sent-today and does not send a second night', async () => {
+    const sendEpisode = vi.fn<TickActions['sendEpisode']>(async () => ({kind: 'sent-to-tiktok', publishId: 'pub-1'}));
+    sandbox = await start({checkPublishes: idleCheck, sendEpisode});
+    seedDueEpisode(sandbox.db);
+    sandbox.db
+      .prepare(
+        `INSERT INTO publishes (id, episode_id, platform, status, attempts, created_at_ms)
+         VALUES ('pub-today', 'ep-1', 'tiktok', 'processing', 1, ?)`,
+      )
+      .run(NOW_MS);
+    sandbox.db.prepare(
+      `INSERT INTO episodes (id, week_start, night, format, track_slug, start_second, duration_seconds,
+         claim, caption, publish_at_ms, label_decision, status)
+       VALUES ('ep-2', ?, 2, 'track_card', 'slug', 0, 15, 'claim', 'caption', ?, 'label_off', 'approved')`,
+    ).run(WEEK, DUE_MS);
+    sandbox.db.prepare(
+      `INSERT INTO renders (id, episode_id, file_path, duration_seconds, frame_count, created_at_ms)
+       VALUES ('render-2', 'ep-2', 'out/ep-2.mp4', 15, 450, 1)`,
+    ).run();
+
+    const reply = await send({path: '/api/tick'});
+
+    expect(reply.status).toBe(200);
+    expect(JSON.parse(reply.body)).toEqual({status: 'idle', reason: 'already-sent-today'});
+    expect(sendEpisode).not.toHaveBeenCalled();
+  });
+
+  it('answers 500 when the publish check throws, and starts no send', async () => {
+    const sendEpisode = vi.fn<TickActions['sendEpisode']>(async () => ({kind: 'sent-to-tiktok', publishId: 'pub-1'}));
+    sandbox = await start({
+      checkPublishes: async () => {
+        throw new Error('status down');
+      },
+      sendEpisode,
+    });
+    seedDueEpisode(sandbox.db);
+
+    const reply = await send({path: '/api/tick'});
+
+    expect(reply.status).toBe(500);
+    expect(JSON.parse(reply.body)).toEqual({code: 'internal', message: 'Something went wrong in the studio. Try again.'});
+    expect(reply.body).not.toContain('status down');
+    expect(sendEpisode).not.toHaveBeenCalled();
+    expect(Number(sandbox.db.prepare('SELECT COUNT(*) AS count FROM jobs').get()?.count)).toBe(0);
+  });
+
+  it('does not send when the tick is opened with GET', async () => {
+    const sendEpisode = vi.fn<TickActions['sendEpisode']>(async () => ({kind: 'sent-to-tiktok', publishId: 'pub-1'}));
+    sandbox = await start({checkPublishes: idleCheck, sendEpisode});
+    seedDueEpisode(sandbox.db);
+
+    const reply = await send({method: 'GET', path: '/api/tick'});
+
+    expect(reply.status).toBe(405);
+    expect(JSON.parse(reply.body).code).toBe('method_not_allowed');
+    expect(sendEpisode).not.toHaveBeenCalled();
   });
 
   it('refuses a foreign Origin on the tick the same way as the other routes', async () => {

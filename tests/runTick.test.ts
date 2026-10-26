@@ -1,7 +1,7 @@
 import type {DatabaseSync} from 'node:sqlite';
 import {describe, expect, it, vi} from 'vitest';
 import {runTick, type RunTickResult} from '../src/publish/runTick';
-import {failInterruptedSends} from '../src/publish/tickSelection';
+import {failInterruptedSends, finishSendJob} from '../src/publish/tickSelection';
 import type {CheckTikTokPublishesSummary} from '../src/publish/checkTikTokPublishes';
 import type {SendEpisodeToTikTokResult} from '../src/publish/sendEpisodeToTikTok';
 import {openStudioDb} from '../src/store/studioDb';
@@ -267,6 +267,135 @@ describe('runTick', () => {
     expect(readJobs(db)[0]).toMatchObject({status: 'failed', episode_id: 'ep-1'});
   });
 
+  it('marks the job failed when the night was already claimed, and does not send the next one', async () => {
+    const db = openDb();
+    seedEpisode(db, {id: 'ep-1', night: 1});
+    seedEpisode(db, {id: 'ep-2', night: 2, publishAtMs: DUE_MS + 60_000});
+    const sendEpisode = vi.fn(async () => ({kind: 'already-claimed' as const, status: 'processing' as const}));
+
+    const result = await tick(db, {sendEpisode});
+
+    expect(result).toEqual({
+      kind: 'failed',
+      jobId: 'job-1',
+      episodeId: 'ep-1',
+      message: 'This night is already processing with TikTok.',
+    });
+    expect(sendEpisode).toHaveBeenCalledTimes(1);
+    expect(readJobs(db)).toEqual([
+      {
+        id: 'job-1',
+        kind: 'send',
+        episode_id: 'ep-1',
+        status: 'failed',
+        message: 'This night is already processing with TikTok.',
+      },
+    ]);
+  });
+
+  it('marks the job failed when the send throws, so the next tick is not stuck busy', async () => {
+    const db = openDb();
+    seedEpisode(db);
+    const sendEpisode = vi.fn(async () => {
+      throw new Error('socket hang up');
+    });
+
+    const result = await tick(db, {sendEpisode});
+
+    expect(result).toEqual({kind: 'failed', jobId: 'job-1', episodeId: 'ep-1', message: 'socket hang up'});
+    expect(readJobs(db)).toEqual([
+      {id: 'job-1', kind: 'send', episode_id: 'ep-1', status: 'failed', message: 'socket hang up'},
+    ]);
+  });
+
+  it('records a thrown non-error as text on the failed job', async () => {
+    const db = openDb();
+    seedEpisode(db);
+
+    const result = await tick(db, {
+      sendEpisode: async () => {
+        throw 'disk full';
+      },
+    });
+
+    expect(result).toEqual({kind: 'failed', jobId: 'job-1', episodeId: 'ep-1', message: 'disk full'});
+  });
+
+  it('sends nothing and leaves no job when the publish check throws', async () => {
+    const db = openDb();
+    seedEpisode(db);
+    const sendEpisode = vi.fn(async () => ({kind: 'sent-to-tiktok' as const, publishId: 'pub-new'}));
+
+    await expect(tick(db, {checkPublishes: async () => Promise.reject(new Error('status down')), sendEpisode})).rejects.toThrow(
+      'status down',
+    );
+
+    expect(sendEpisode).not.toHaveBeenCalled();
+    expect(readJobs(db)).toEqual([]);
+  });
+
+  it('still sends while a render is running, and a finished send is not the slot', async () => {
+    const db = openDb();
+    seedEpisode(db);
+    db.prepare(
+      `INSERT INTO jobs (id, kind, episode_id, status, created_at_ms, updated_at_ms)
+       VALUES ('job-render', 'render', 'ep-1', 'running', 1, 1),
+              ('job-done', 'send', 'ep-1', 'succeeded', 1, 1)`,
+    ).run();
+
+    const result = await tick(db);
+
+    expect(result).toMatchObject({kind: 'sent', episodeId: 'ep-1'});
+    expect(readJobs(db).find((job) => job.id === 'job-render')).toMatchObject({status: 'running', kind: 'render'});
+    expect(readJobs(db).find((job) => job.id === 'job-done')).toMatchObject({status: 'succeeded', kind: 'send'});
+  });
+
+  it('picks the earlier night when two nights are due at the same time', async () => {
+    const db = openDb();
+    seedEpisode(db, {id: 'ep-a', night: 2, publishAtMs: DUE_MS});
+    seedEpisode(db, {id: 'ep-z', night: 1, publishAtMs: DUE_MS});
+
+    const result = await tick(db);
+
+    expect(result).toMatchObject({kind: 'sent', episodeId: 'ep-z'});
+  });
+
+  it('treats the 25-hour autumn day as one Ljubljana day', async () => {
+    const db = openDb();
+    const nowMs = Date.parse('2026-10-25T23:30:00+01:00');
+    seedEpisode(db, {
+      id: 'ep-sent',
+      night: 1,
+      publishStatus: 'sent',
+      publishCreatedAtMs: Date.parse('2026-10-25T00:30:00+02:00'),
+    });
+    seedEpisode(db, {id: 'ep-next', night: 2, publishAtMs: Date.parse('2026-10-25T18:00:00+01:00')});
+    const sendEpisode = vi.fn(async () => ({kind: 'sent-to-tiktok' as const, publishId: 'pub-new'}));
+
+    const result = await tick(db, {nowMs, sendEpisode});
+
+    expect(result).toEqual({kind: 'idle', reason: 'already-sent-today'});
+    expect(sendEpisode).not.toHaveBeenCalled();
+  });
+
+  it('sends again on the morning after the 23-hour spring day', async () => {
+    const db = openDb();
+    const nowMs = Date.parse('2026-03-30T00:30:00+02:00');
+    seedEpisode(db, {
+      id: 'ep-yesterday',
+      night: 1,
+      publishStatus: 'sent',
+      publishCreatedAtMs: Date.parse('2026-03-29T00:30:00+01:00'),
+    });
+    seedEpisode(db, {id: 'ep-today', night: 2, publishAtMs: Date.parse('2026-03-30T00:00:00+02:00')});
+    const sendEpisode = vi.fn(async () => ({kind: 'sent-to-tiktok' as const, publishId: 'pub-new'}));
+
+    const result = await tick(db, {nowMs, sendEpisode});
+
+    expect(result).toMatchObject({kind: 'sent', episodeId: 'ep-today'});
+    expect(sendEpisode).toHaveBeenCalledTimes(1);
+  });
+
   it('lets the next tick send after a startup clears a send left running', async () => {
     const db = openDb();
     seedEpisode(db);
@@ -300,5 +429,38 @@ describe('runTick', () => {
     expect(result).toEqual({kind: 'busy'});
     expect(checkPublishes).toHaveBeenCalledTimes(1);
     expect(sendEpisode).not.toHaveBeenCalled();
+  });
+
+  it('fails only a send left running, and leaves renders and finished sends alone', () => {
+    const db = openDb();
+    seedEpisode(db);
+    db.prepare(
+      `INSERT INTO jobs (id, kind, episode_id, status, created_at_ms, updated_at_ms)
+       VALUES ('job-render', 'render', 'ep-1', 'running', 1, 1),
+              ('job-done', 'send', 'ep-1', 'succeeded', 1, 1),
+              ('job-dead', 'send', 'ep-1', 'running', 1, 1)`,
+    ).run();
+
+    expect(failInterruptedSends(db, NOW_MS)).toBe(1);
+
+    expect(readJobs(db)).toEqual([
+      {
+        id: 'job-dead',
+        kind: 'send',
+        episode_id: 'ep-1',
+        status: 'failed',
+        message: 'The daemon stopped during this send.',
+      },
+      {id: 'job-done', kind: 'send', episode_id: 'ep-1', status: 'succeeded', message: null},
+      {id: 'job-render', kind: 'render', episode_id: 'ep-1', status: 'running', message: null},
+    ]);
+  });
+
+  it('refuses to finish a send job that is not there', () => {
+    const db = openDb();
+
+    expect(() => finishSendJob(db, {jobId: 'missing', status: 'failed', message: 'gone', nowMs: NOW_MS})).toThrow(
+      'finish-send-job: no send job missing',
+    );
   });
 });
