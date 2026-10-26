@@ -17,9 +17,9 @@ The product is for one user on one laptop. It has no accounts and no public web 
 | Public site on the Oracle box, and its deploy script | Exists |
 | Review demo video (ReviewDemo) | Exists |
 | SQLite store, jobs table, migrations | Implemented |
-| StudioDaemon | Built: serves the page and the plan, episode and publish API. Tick, render and jobs are planned. |
+| StudioDaemon | Built: serves the page, the plan API and the tick. Render and job polling are planned. |
 | Review page | Built (cycle 1): the week screen. No render button yet. |
-| Tick with publish rows and the 5-share cap | Planned (cycle 1) |
+| Tick with publish rows and the 5-share cap | Built (cycle 1). One send per Europe/Ljubljana day. The human taps Post. |
 | Scene format | Planned (cycle 1). The Grok kill-gate passed on 14 October 2026. |
 | Showrunner, swap, Loop, Title, YouTube adapter | Deferred to cycle 2 |
 | TikTok direct post | Later. Needs TikTok app review. |
@@ -76,11 +76,11 @@ The daemon is the only writer. Workers are its children and report back to it. T
 | Container | What it does | State |
 | --- | --- | --- |
 | Review page | Shows the week as one comic page. Sends the Creator's choices to the API. | Built |
-| StudioDaemon | Serves the page and `/api`. Validates input. Owns the database, the job queue, the asset and render mutex, the tick and token refresh. Binds 127.0.0.1 only. | Built for the plan API. Jobs and tick planned. |
+| StudioDaemon | Serves the page and `/api`. Validates input. Owns the database, the job queue, the asset and render mutex, the tick and token refresh. Binds 127.0.0.1 only. | Built for the plan API and the tick. Render jobs are planned. |
 | SQLite store | Source of truth for plans, episodes, assets, renders, jobs and publishes. Has a `schema_migrations` table. | Implemented |
 | Worker child | Renders an episode to a 9:16 mp4 with Remotion at concurrency 2, or runs the Grok CLI for a Scene. One at a time. | Render exists as a CLI (render-track). Planned as a child. |
-| launchd tick | Calls `POST /api/tick` every 15 minutes. The daemon sends due, approved episodes. | Planned |
-| TikTok publisher adapter | Inbox draft upload. | Exists. Planned as a daemon module. |
+| launchd tick | Calls `POST /api/tick` every 15 minutes. The daemon sends at most one due, approved episode. | Built. The human loads the template. |
+| TikTok publisher adapter | Inbox draft upload. The tick calls it from the daemon. | Built |
 
 ## Boundaries
 

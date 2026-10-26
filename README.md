@@ -9,7 +9,8 @@ Makes short vertical videos for the Smokrates music project and sends them to Ti
 | `npm install` | Install dependencies. |
 | `npm run studio` | Open Remotion Studio to preview compositions. |
 | `SMOK_STUDIO_DIR=/path/to/Smokrates npm run render -- <slug> --label label_on|label_off` | Render a track to out/ as mp4 plus a caption JSON. Options: --start, --background, --stills. |
-| `npm run studio:daemon` | Start the daemon and the review page at http://127.0.0.1:8724. Optional env: STUDIO_PORT, STUDIO_DB_PATH. |
+| `npm run studio:daemon` | Start the daemon and the review page at http://127.0.0.1:8724. The tick is `POST /api/tick`. Optional env: STUDIO_PORT, STUDIO_DB_PATH. |
+| See `docs/tick-setup.md` | Install or remove the launchd tick. The human runs those two commands. |
 | `npm run studio:attach-render -- <episodeId> out/<file>.mp4` | Temporary: mark a night rendered until the render operation lands. |
 | `npm run studio:db:migrate` | Apply database migrations. |
 | `npm run render:demo` | Render the TikTok app review demo video. |
