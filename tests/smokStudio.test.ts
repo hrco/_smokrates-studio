@@ -79,6 +79,17 @@ describe('loadTrack', () => {
     expect(!result.ok && result.error.code).toBe('invalid-song-json');
   });
 
+  it('rejects song.json that is not an object', async () => {
+    const trackDir = await createTrackDir('t01', {
+      'song.json': [validSong],
+      'cover.png': '',
+      'track.mp3': '',
+    });
+    const result = await loadTrack(trackDir);
+    expect(!result.ok && result.error.code).toBe('invalid-song-json');
+    expect(!result.ok && result.error.detail).toContain('JSON object');
+  });
+
   it('reports a missing required field', async () => {
     const {theme: _theme, ...songWithoutTheme} = validSong;
     const trackDir = await createTrackDir('t01', {
