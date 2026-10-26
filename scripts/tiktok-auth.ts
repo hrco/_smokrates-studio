@@ -12,6 +12,7 @@ import {readTikTokCredentials} from '../src/tiktok/credentials';
 import {buildAuthorizeUrl, exchangeCode} from '../src/tiktok/oauth';
 import {createCodeVerifier, toCodeChallenge} from '../src/tiktok/pkce';
 import {createFileTokenStore, DEFAULT_TOKEN_PATH} from '../src/tiktok/tokenStore';
+import {handleAuthCallback} from '../src/tiktok/authCallback';
 
 const DEFAULT_REDIRECT_URI = 'http://127.0.0.1:8723/callback/';
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000;
@@ -28,11 +29,6 @@ function readEnv(): {clientKey: string; clientSecret: string; redirectUri: strin
   const {clientKey, clientSecret, environment, tokenFileName} = credentials.value;
   const tokenPath = path.join(path.dirname(DEFAULT_TOKEN_PATH), tokenFileName);
   return {clientKey, clientSecret, environment, tokenPath, redirectUri: process.env.TIKTOK_REDIRECT_URI || DEFAULT_REDIRECT_URI};
-}
-
-function replyWithText(response: ServerResponse, statusCode: number, text: string): void {
-  response.writeHead(statusCode, {'Content-Type': 'text/plain; charset=utf-8'});
-  response.end(text);
 }
 
 function listen(server: Server, redirectUrl: URL): Promise<void> {
@@ -52,38 +48,47 @@ async function main(): Promise<void> {
 
   const server = createServer((request, response) => {
     const requestUrl = new URL(request.url ?? '/', redirectUrl);
-    if (requestUrl.pathname !== redirectUrl.pathname) return replyWithText(response, 404, 'Not found.');
+    if (requestUrl.pathname !== redirectUrl.pathname) {
+      response.writeHead(404, {'Content-Type': 'text/plain; charset=utf-8'});
+      response.end('Not found.');
+      return;
+    }
 
     void handleCallback(requestUrl, response);
   });
 
-  async function handleCallback(requestUrl: URL, response: ServerResponse): Promise<void> {
-    if (requestUrl.searchParams.get('state') !== state) {
-      return replyWithText(response, 400, 'State mismatch. Request rejected.');
-    }
-    const errorParam = requestUrl.searchParams.get('error');
-    if (errorParam) {
-      replyWithText(response, 400, `Authorization failed: ${errorParam}`);
-      return exitWithError(`authorization denied: ${errorParam} ${requestUrl.searchParams.get('error_description') ?? ''}`);
-    }
-    const code = requestUrl.searchParams.get('code');
-    if (!code) return replyWithText(response, 400, 'Missing code.');
+  function replyThenClose(response: ServerResponse, statusCode: number, text: string, exitCode: number): void {
+    response.writeHead(statusCode, {'Content-Type': 'text/plain; charset=utf-8'});
+    response.end(text, () => {
+      server.close();
+      process.exitCode = exitCode;
+    });
+  }
 
-    const exchanged = await exchangeCode({clientKey, clientSecret, code, redirectUri, codeVerifier}, fetch);
-    if (!exchanged.ok) {
-      replyWithText(response, 500, 'Token exchange failed. See the terminal.');
-      const {operation, code: errorCode, detail} = exchanged.error;
-      return exitWithError(`${operation}: ${errorCode} ${detail}`);
+  async function handleCallback(requestUrl: URL, response: ServerResponse): Promise<void> {
+    const result = await handleAuthCallback(requestUrl, {
+      expectedState: state,
+      exchangeCode: (code) => exchangeCode({clientKey, clientSecret, code, redirectUri, codeVerifier}, fetch),
+    });
+
+    if (result.ok) {
+      await tokenStore.save(result.tokens);
+      console.log(result.logMessage);
+      replyThenClose(response, 200, 'Authorized. You can close this tab.', 0);
+    } else {
+      if (result.terminalMessage) {
+        console.error(`tiktok-auth: ${result.terminalMessage}`);
+      }
+      replyThenClose(response, result.status, result.message, 1);
     }
-    await tokenStore.save(exchanged.value);
-    replyWithText(response, 200, 'Authorized. You can close this tab.');
-    console.log(`Authorized for scopes: ${exchanged.value.scope}`);
-    server.close();
-    process.exit(0);
   }
 
   await listen(server, redirectUrl);
-  setTimeout(() => exitWithError('timed out after 5 minutes without a callback'), AUTH_TIMEOUT_MS).unref();
+  setTimeout(() => {
+    console.error('tiktok-auth: timed out after 5 minutes without a callback');
+    server.close();
+    process.exitCode = 1;
+  }, AUTH_TIMEOUT_MS).unref();
 
   const authorizeUrl = buildAuthorizeUrl({
     clientKey,
