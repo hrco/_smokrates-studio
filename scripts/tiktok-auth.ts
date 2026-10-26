@@ -12,6 +12,7 @@ import {readTikTokCredentials} from '../src/tiktok/credentials';
 import {buildAuthorizeUrl, exchangeCode} from '../src/tiktok/oauth';
 import {createCodeVerifier, toCodeChallenge} from '../src/tiktok/pkce';
 import {createFileTokenStore, DEFAULT_TOKEN_PATH} from '../src/tiktok/tokenStore';
+import {browserOpenArgs} from '../src/tiktok/authBrowser';
 import {handleAuthCallback} from '../src/tiktok/authCallback';
 
 const DEFAULT_REDIRECT_URI = 'http://127.0.0.1:8723/callback/';
@@ -98,8 +99,7 @@ async function main(): Promise<void> {
   });
   console.log(`Open this URL in your browser:\n${authorizeUrl}`);
   // The default browser may not hold the creator's TikTok session; TIKTOK_AUTH_BROWSER picks the app (e.g. Safari).
-  const browserApp = process.env.TIKTOK_AUTH_BROWSER;
-  const openArgs = browserApp ? ['-a', browserApp, authorizeUrl] : [authorizeUrl];
+  const openArgs = browserOpenArgs(process.env.TIKTOK_AUTH_BROWSER, authorizeUrl);
   execFile('open', openArgs, (error) => {
     if (error) console.error('tiktok-auth: could not open the browser; use the URL above.');
   });

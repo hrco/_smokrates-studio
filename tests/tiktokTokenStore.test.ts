@@ -1,4 +1,4 @@
-import {mkdtemp, readFile, rm, stat} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -44,6 +44,13 @@ describe('createFileTokenStore', () => {
     expect((await stat(tokenPath)).mode & 0o777).toBe(0o600);
     expect((await stat(path.dirname(tokenPath))).mode & 0o777).toBe(0o700);
   });
+
+  it('throws when the token file is not a token set', async () => {
+    await mkdir(path.dirname(tokenPath), {recursive: true});
+    await writeFile(tokenPath, '{"accessToken":"only-one"}\n');
+
+    await expect(createFileTokenStore(tokenPath).load()).rejects.toThrow(/unexpected shape/);
+  });
 });
 
 describe('getValidAccessToken', () => {
@@ -88,5 +95,42 @@ describe('getValidAccessToken', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('no-tokens');
+  });
+
+  it('refreshes when the access token has exactly five minutes left', async () => {
+    const store = createFileTokenStore(tokenPath);
+    await store.save(tokensExpiringIn(5 * MINUTE_MS));
+    const rotated = tokensExpiringIn(60 * MINUTE_MS, 'access-new');
+    const refreshFn = vi.fn().mockResolvedValue({ok: true, value: rotated});
+
+    const result = await getValidAccessToken(store, refreshFn, NOW_MS);
+
+    expect(result).toEqual({ok: true, value: 'access-new'});
+    expect(refreshFn).toHaveBeenCalledOnce();
+  });
+
+  it('reuses a token that is valid for just over five minutes', async () => {
+    const store = createFileTokenStore(tokenPath);
+    await store.save(tokensExpiringIn(5 * MINUTE_MS + 1));
+    const refreshFn = vi.fn();
+
+    const result = await getValidAccessToken(store, refreshFn, NOW_MS);
+
+    expect(result).toEqual({ok: true, value: 'access-old'});
+    expect(refreshFn).not.toHaveBeenCalled();
+  });
+
+  it('refuses an expired refresh token without calling refresh or rewriting the file', async () => {
+    const store = createFileTokenStore(tokenPath);
+    const saved = {...tokensExpiringIn(MINUTE_MS), refreshExpiresAt: NOW_MS};
+    await store.save(saved);
+    const refreshFn = vi.fn();
+
+    const result = await getValidAccessToken(store, refreshFn, NOW_MS);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('refresh-token-expired');
+    expect(refreshFn).not.toHaveBeenCalled();
+    expect(await store.load()).toEqual(saved);
   });
 });
