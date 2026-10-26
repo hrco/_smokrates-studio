@@ -12,7 +12,10 @@
     "tiktok:auth": "tsx scripts/tiktok-auth.ts",
     "tiktok:draft": "tsx scripts/tiktok-upload-draft.ts",
     "deploy:site": "bash scripts/deploy-site.sh deploy",
-    "tiktok:status": "tsx scripts/tiktok-status.ts"
+    "tiktok:status": "tsx scripts/tiktok-status.ts",
+    "instagram:draft": "tsx scripts/instagram-draft.ts",
+    "instagram:publish": "tsx scripts/instagram-publish.ts",
+    "instagram:refresh": "tsx scripts/instagram-refresh.ts"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.535",
