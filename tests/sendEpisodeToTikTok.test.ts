@@ -1,6 +1,7 @@
 import type {DatabaseSync} from 'node:sqlite';
 import {describe, expect, it, vi} from 'vitest';
 import {sendEpisodeToTikTok} from '../src/publish/sendEpisodeToTikTok';
+import {countInFlightShares} from '../src/publish/tiktokPublishLedger';
 import {openStudioDb} from '../src/store/studioDb';
 
 const NOW_MS = 1_000_000_000_000;
@@ -32,6 +33,19 @@ function readPublish(db: DatabaseSync, episodeId: string): Record<string, unknow
   const row = db.prepare("SELECT * FROM publishes WHERE platform = 'tiktok' AND episode_id = ?").get(episodeId);
   if (row === undefined) throw new Error(`no publish row for ${episodeId}`);
   return row;
+}
+
+function dbThatRejectsPublishIdWrite(db: DatabaseSync): DatabaseSync {
+  const originalPrepare = db.prepare.bind(db);
+  const prepare: DatabaseSync['prepare'] = (sql) => {
+    const statement = originalPrepare(sql);
+    if (!sql.startsWith('UPDATE publishes SET external_id')) return statement;
+    const run = () => {
+      throw new Error('SQLITE_BUSY: database is locked');
+    };
+    return Object.assign(statement, {run});
+  };
+  return Object.assign(db, {prepare});
 }
 
 function sendOptions(db: DatabaseSync, fetchFn: typeof fetch, episodeId = 'ep-1') {
@@ -91,6 +105,22 @@ describe('sendEpisodeToTikTok', () => {
 
     expect(result).toEqual({kind: 'already-claimed', status: 'failed'});
     expect(secondFetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the row processing when init succeeded but the publish id was not stored', async () => {
+    const db = openSeededDb(1);
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(okInit));
+
+    const result = await sendEpisodeToTikTok(sendOptions(dbThatRejectsPublishIdWrite(db), fetchFn));
+
+    expect(result).toMatchObject({
+      kind: 'upload-failed',
+      publishId: null,
+      error: {code: 'record-publish-id-failed'},
+    });
+    expect(readPublish(db, 'ep-1')).toMatchObject({status: 'processing', external_id: null});
+    expect(countInFlightShares(db, NOW_MS)).toBe(1);
+    expect(fetchFn).toHaveBeenCalledOnce();
   });
 
   it('refuses a new share without any request when 5 are in flight', async () => {

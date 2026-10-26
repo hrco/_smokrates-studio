@@ -53,7 +53,19 @@ async function decideOutcome(
 ): Promise<Outcome> {
   if (publish.publishId === null) return decideWhenUndelivered(publish, options.nowMs);
 
-  const report = await options.fetchStatus(publish.publishId);
+  let report: TikTokResult<PublishStatusReport>;
+  try {
+    report = await options.fetchStatus(publish.publishId);
+  } catch (error) {
+    report = {
+      ok: false,
+      error: {
+        operation: 'fetch-publish-status',
+        code: 'fetch-threw',
+        detail: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
   if (!report.ok) {
     statusErrors.push(report.error);
     return decideWhenUndelivered(publish, options.nowMs);
