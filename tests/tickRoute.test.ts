@@ -159,7 +159,7 @@ describe('tick.run', () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it('returns idle share-cap-reached when the ledger refuses the send', async () => {
+  it('returns 202 and the job id when the share cap refuses the send', async () => {
     sandbox = await start({
       checkPublishes: idleCheck,
       sendEpisode: async () => ({kind: 'share-cap-reached', inFlightShares: 5}),
@@ -168,8 +168,10 @@ describe('tick.run', () => {
 
     const reply = await send({path: '/api/tick'});
 
-    expect(reply.status).toBe(200);
-    expect(JSON.parse(reply.body)).toEqual({status: 'idle', reason: 'share-cap-reached'});
+    expect(reply.status).toBe(202);
+    expect(JSON.parse(reply.body)).toEqual({jobId: 'id-1'});
+    const job = sandbox.db.prepare('SELECT status, message FROM jobs WHERE id = ?').get('id-1');
+    expect(job).toMatchObject({status: 'failed'});
   });
 
   it('answers 200 idle tiktok-not-connected and still starts without tick actions', async () => {

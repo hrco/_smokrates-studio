@@ -154,12 +154,11 @@ function sendTickResult(res: ServerResponse, result: RunTickResult): void {
     sendError(res, 409, {code: 'tick_busy', message: 'A send is already running.'});
     return;
   }
-  if (result.kind === 'sent' || result.kind === 'failed') {
+  if (result.kind === 'sent' || result.kind === 'failed' || result.kind === 'share-cap-reached') {
     sendJson(res, 202, {jobId: result.jobId});
     return;
   }
-  const reason = result.kind === 'idle' ? result.reason : 'share-cap-reached';
-  sendJson(res, 200, {status: 'idle', reason});
+  sendJson(res, 200, {status: 'idle', reason: result.reason});
 }
 
 async function handleTick({deps, res}: RouteContext): Promise<void> {
