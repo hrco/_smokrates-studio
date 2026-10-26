@@ -11,6 +11,12 @@ describe('toShortLine', () => {
     expect(line).toBe('Warm golden-hour funky dub that flows without drops');
   });
 
+  it('cuts at a semicolon when that is the clause boundary that fits', () => {
+    expect(toShortLine('Warm golden-hour dub; late and unhurried under a wide quiet sky tonight please')).toBe(
+      'Warm golden-hour dub',
+    );
+  });
+
   it('falls back to a word boundary when no clause boundary fits', () => {
     const line = toShortLine('Deep slow bass meditation for long night drives under a quiet sky over the lake');
     expect(line.length).toBeLessThanOrEqual(60);

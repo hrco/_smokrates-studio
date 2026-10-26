@@ -48,6 +48,22 @@ describe('uploadVideoToInbox', () => {
     expect(putInit.body).toBe(videoBytes);
   });
 
+  it('does not upload when init JSON has no error field', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({data: {publish_id: 'pub-1', upload_url: 'https://upload.example/secret-path'}}),
+    );
+
+    const result = await uploadVideoToInbox({accessToken: 'tok', videoBytes}, fetchFn);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('invalid-response');
+      expect(result.error.detail).toContain('without an error field');
+      expect(JSON.stringify(result)).not.toContain('secret-path');
+    }
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
   it('fails when the init error code is not ok, without uploading', async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({error: {code: 'access_token_invalid', message: 'bad token', log_id: 'log-9'}}, 401),
@@ -126,7 +142,41 @@ describe('waitForInboxDelivery', () => {
     expect(sleepFn).toHaveBeenCalledWith(5000);
     const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://open.tiktokapis.com/v2/post/publish/status/fetch/');
+    expect(init.method).toBe('POST');
+    expect(init.headers).toEqual({
+      Authorization: 'Bearer tok',
+      'Content-Type': 'application/json; charset=UTF-8',
+    });
     expect(JSON.parse(init.body as string)).toEqual({publish_id: 'pub-1'});
+  });
+
+  it('stops when the status call fails instead of polling until timeout', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({error: {code: 'access_token_invalid', message: 'bad token', log_id: 'log-9'}}, 401),
+    );
+    const sleepFn = vi.fn();
+
+    const result = await waitForInboxDelivery(input, fetchFn, {sleepFn});
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.operation).toBe('fetch-publish-status');
+      expect(result.error.code).toBe('access_token_invalid');
+    }
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(sleepFn).not.toHaveBeenCalled();
+  });
+
+  it('polls once and times out when the budget is shorter than one interval', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(statusBody('PROCESSING_UPLOAD')));
+    const sleepFn = vi.fn();
+
+    const result = await waitForInboxDelivery(input, fetchFn, {pollIntervalMs: 5000, timeoutMs: 1000, sleepFn});
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('timeout');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(sleepFn).not.toHaveBeenCalled();
   });
 
   it('returns an error carrying fail_reason on FAILED', async () => {
