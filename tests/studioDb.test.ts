@@ -143,6 +143,13 @@ describe('applyPendingMigrations', () => {
     expect(() =>
       applyPendingMigrations(db, [{version: 1, name: 'one', sql: 'CREATE TABLE one (id INTEGER)'}]),
     ).toThrow(/version 2/);
+    expect(listTableNames(db)).toEqual(['one', 'schema_migrations', 'two']);
+  });
+
+  it('rejects a version that is not a whole number', () => {
+    const migrations = [{version: 1.5, name: 'half', sql: 'CREATE TABLE half (id INTEGER)'}];
+
+    expect(() => applyPendingMigrations(new DatabaseSync(':memory:'), migrations)).toThrow(/version 1\.5/);
   });
 });
 
@@ -251,6 +258,7 @@ describe('applyPendingMigrations – stale pre-read (concurrent connections)', (
     const dbA = new DatabaseSync(dbPath);
     dbA.exec('PRAGMA journal_mode = WAL');
     applyPendingMigrations(dbA, [v1]);
+    const committed = dbA.prepare('SELECT version, name, applied_at_ms FROM schema_migrations').get();
     dbA.close();
 
     // Connection B has a stale pre-read: it read schema_migrations before A committed
@@ -261,8 +269,8 @@ describe('applyPendingMigrations – stale pre-read (concurrent connections)', (
     const applied = applyPendingMigrations(dbB, [v1], []);
 
     expect(applied).toEqual([]);
-    // v1 is in the table exactly once.
-    expect(dbB.prepare('SELECT count(*) AS n FROM schema_migrations').get()).toMatchObject({n: 1});
+    // The row A committed is untouched: not duplicated and not rewritten.
+    expect(dbB.prepare('SELECT version, name, applied_at_ms FROM schema_migrations').all()).toEqual([committed]);
     dbB.close();
   });
 
@@ -283,6 +291,37 @@ describe('applyPendingMigrations – stale pre-read (concurrent connections)', (
     // v1 skipped (already applied), v2 applied.
     expect(applied).toEqual([2]);
     expect(dbB.prepare('SELECT count(*) AS n FROM schema_migrations').get()).toMatchObject({n: 2});
+    dbB.close();
+  });
+
+  it('rolls back only the failing migration after skipping one another process committed', () => {
+    const dbPath = path.join(tempDir, 'skip-then-fail.db');
+    const init: Migration = {
+      version: 1,
+      name: 'init',
+      sql: 'CREATE TABLE one (id INTEGER PRIMARY KEY); INSERT INTO one (id) VALUES (7)',
+    };
+    const broken: Migration = {
+      version: 2,
+      name: 'broken',
+      sql: 'CREATE TABLE two (id INTEGER); CREATE TABLE two (id INTEGER)',
+    };
+
+    const dbA = new DatabaseSync(dbPath);
+    dbA.exec('PRAGMA journal_mode = WAL');
+    applyPendingMigrations(dbA, [init]);
+    const committed = dbA.prepare('SELECT version, name, applied_at_ms FROM schema_migrations').get();
+    dbA.close();
+
+    const dbB = new DatabaseSync(dbPath);
+    dbB.exec('PRAGMA journal_mode = WAL');
+    expect(() => applyPendingMigrations(dbB, [init, broken], [])).toThrow(/migration 2 \(broken\)/);
+
+    expect(dbB.prepare('SELECT version, name, applied_at_ms FROM schema_migrations').all()).toEqual([committed]);
+    expect(dbB.prepare('SELECT id FROM one').all()).toEqual([{id: 7}]);
+    expect(listTableNames(dbB)).toEqual(['one', 'schema_migrations']);
+    expect(() => dbB.exec('BEGIN IMMEDIATE')).not.toThrow();
+    dbB.exec('ROLLBACK');
     dbB.close();
   });
 });
