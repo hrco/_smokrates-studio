@@ -509,8 +509,8 @@ components:
           enum: [idle]
         reason:
           type: string
-          enum: [nothing-due, already-sent-today, share-cap-reached, tiktok-not-connected]
-          description: Why no episode was sent.
+          enum: [nothing-due, already-sent-today, tiktok-not-connected]
+          description: Why no episode was sent. Share cap reached returns 202 with a failed job id.
     Connection:
       type: object
       description: Derived from the token files. Not stored.
