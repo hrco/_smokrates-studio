@@ -28,6 +28,7 @@ export type SendEpisodeToTikTokResult =
  * Sends one episode video to the TikTok inbox at most once.
  * The publish row is claimed before init and the publish_id is stored before the bytes upload.
  * A failed upload marks the row failed and is never retried, because TikTok may still hold the pending slot.
+ * If init succeeded but the publish id was not stored, the row stays processing so the share cap still counts it.
  * On success the row stays processing; delivery is checked later. Episode status is not touched.
  */
 export async function sendEpisodeToTikTok(options: SendEpisodeToTikTokOptions): Promise<SendEpisodeToTikTokResult> {
@@ -50,6 +51,10 @@ export async function sendEpisodeToTikTok(options: SendEpisodeToTikTokOptions): 
   );
   if (upload.ok) return {kind: 'sent-to-tiktok', publishId: upload.value.publishId};
 
-  markTikTokPublish(db, {publishRowId, status: 'failed', nowMs});
+  // Init succeeded but the publish id was not stored. TikTok holds the slot.
+  // Leave the row processing so the cap counts it and the checker stalls it.
+  if (upload.error.code !== 'record-publish-id-failed') {
+    markTikTokPublish(db, {publishRowId, status: 'failed', nowMs});
+  }
   return {kind: 'upload-failed', error: upload.error, publishId: storedPublishId};
 }

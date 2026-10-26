@@ -130,4 +130,37 @@ describe('checkTikTokPublishes', () => {
     expect(summary.statusErrors).toEqual([error]);
     expect(readStatus(db)).toBe('processing');
   });
+
+  it('turns a thrown status fetch into an error and still checks the next row', async () => {
+    const db = openDbWithProcessingRow('pub-1');
+    db.prepare(
+      `INSERT INTO episodes (id, week_start, night, format, track_slug, start_second, duration_seconds,
+         claim, caption, publish_at_ms, label_decision, status)
+       VALUES ('ep-2', '2026-10-19', 2, 'track_card', 'slug', 0, 15, 'claim', 'caption', 1, 'label_on', 'approved')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO publishes (id, episode_id, platform, external_id, status, attempts, created_at_ms)
+       VALUES ('row-2', 'ep-2', 'tiktok', 'pub-2', 'processing', 1, ?)`,
+    ).run(CREATED_AT_MS);
+
+    const fetchStatus = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockResolvedValueOnce(reportOf('SEND_TO_USER_INBOX'));
+
+    const summary = await checkTikTokPublishes({
+      db,
+      nowMs: CREATED_AT_MS + 31 * MINUTE_MS,
+      fetchStatus,
+    });
+
+    expect(summary.sent).toBe(1);
+    expect(summary.stalled).toBe(1);
+    expect(summary.statusErrors).toEqual([
+      {operation: 'fetch-publish-status', code: 'fetch-threw', detail: 'socket hang up'},
+    ]);
+    expect(readStatus(db)).toBe('stalled');
+    expect(db.prepare("SELECT status FROM publishes WHERE id = 'row-2'").get()).toMatchObject({status: 'sent'});
+    expect(fetchStatus).toHaveBeenCalledTimes(2);
+  });
 });
