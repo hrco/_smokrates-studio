@@ -13,6 +13,7 @@ import {
   skipEpisode,
   updateEpisode,
 } from '../store/planStore';
+import {listPublishesForWeek} from '../store/publishList';
 import {readStudioHealth} from '../store/studioHealth';
 
 export type StudioDeps = {
@@ -23,7 +24,13 @@ export type StudioDeps = {
   webDir: string;
 };
 
-type RouteContext = {deps: StudioDeps; req: IncomingMessage; res: ServerResponse; param: string};
+type RouteContext = {
+  deps: StudioDeps;
+  req: IncomingMessage;
+  res: ServerResponse;
+  param: string;
+  query: URLSearchParams;
+};
 
 type Route = {
   method: string;
@@ -92,6 +99,12 @@ function handleGetPlan({deps, res, param}: RouteContext): void {
   sendNoPlan(res);
 }
 
+function handleListPublishes({deps, res, query}: RouteContext): void {
+  const weekStart = parseWeekStart(query.get('weekStart'));
+  if (!weekStart.ok) return sendInvalidInput(res, weekStart);
+  sendJson(res, 200, listPublishesForWeek(deps.db, weekStart.value));
+}
+
 function handleApproveWeek({deps, res, param}: RouteContext): void {
   const weekStart = parseWeekStart(param);
   if (!weekStart.ok) return sendInvalidInput(res, weekStart);
@@ -139,6 +152,7 @@ function handleSkipEpisode({deps, res, param}: RouteContext): void {
 const ROUTES: readonly Route[] = [
   {method: 'GET', pattern: /^\/api\/health$/, handle: handleHealth},
   {method: 'POST', pattern: /^\/api\/plans$/, handle: handleImportPlan},
+  {method: 'GET', pattern: /^\/api\/publishes$/, handle: handleListPublishes},
   {method: 'GET', pattern: /^\/api\/plans\/([^/]+)$/, handle: handleGetPlan},
   {method: 'POST', pattern: /^\/api\/plans\/([^/]+)\/approve$/, handle: handleApproveWeek},
   {method: 'PATCH', pattern: /^\/api\/episodes\/([^/]+)$/, hasEpisodeId: true, handle: handleUpdateEpisode},
@@ -163,6 +177,7 @@ export async function handleApiRequest(options: {
   pathname: string;
 }): Promise<void> {
   const {deps, req, res, pathname} = options;
+  const query = new URL(req.url ?? '/', 'http://localhost').searchParams;
   let isKnownPath = false;
   for (const route of ROUTES) {
     const match = route.pattern.exec(pathname);
@@ -172,7 +187,7 @@ export async function handleApiRequest(options: {
 
     const param = decodeParam(match[1]);
     if (route.hasEpisodeId === true && !EPISODE_ID_PATTERN.test(param)) return sendNoEpisode(res);
-    await route.handle({deps, req, res, param});
+    await route.handle({deps, req, res, param, query});
     return;
   }
   if (isKnownPath) return sendError(res, 405, {code: 'method_not_allowed', message: 'That method is not allowed here.'});

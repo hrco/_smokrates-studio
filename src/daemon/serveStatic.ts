@@ -5,8 +5,10 @@ import path from 'node:path';
 import {pipeline} from 'node:stream/promises';
 import {sendError} from './httpResponses';
 
-const VENDOR_URL_PREFIX = '/vendor/dnp-xiii/';
-const VENDOR_DIR = 'vendor/dnp-xiii';
+const STATIC_FOLDERS: ReadonlyArray<{urlPrefix: string; folder: string}> = [
+  {urlPrefix: '/vendor/dnp-xiii/', folder: 'vendor/dnp-xiii'},
+  {urlPrefix: '/review/', folder: 'review'},
+];
 
 const PAGE_FILES: Readonly<Record<string, string>> = {
   '/': 'review/index.html',
@@ -28,7 +30,7 @@ export type StaticLookup =
   | {kind: 'bad-path'}
   | {kind: 'not-static'};
 
-/** Splits a vendor path into safe segments. A dot segment, an empty one or a separator inside one is refused. */
+/** Splits a folder path into safe segments. A dot segment, an empty one or a separator inside one is refused. */
 function toSafeSegments(rawRest: string): string[] | undefined {
   const segments: string[] = [];
   for (const rawSegment of rawRest.split('/')) {
@@ -49,11 +51,12 @@ function toSafeSegments(rawRest: string): string[] | undefined {
 export function lookUpStaticFile(rawPath: string, webDir: string): StaticLookup {
   const pageFile = PAGE_FILES[rawPath];
   if (pageFile !== undefined) return {kind: 'file', relativePath: pageFile, rootDir: webDir};
-  if (!rawPath.startsWith(VENDOR_URL_PREFIX)) return {kind: 'not-static'};
+  const staticFolder = STATIC_FOLDERS.find(({urlPrefix}) => rawPath.startsWith(urlPrefix));
+  if (staticFolder === undefined) return {kind: 'not-static'};
 
-  const segments = toSafeSegments(rawPath.slice(VENDOR_URL_PREFIX.length));
+  const segments = toSafeSegments(rawPath.slice(staticFolder.urlPrefix.length));
   if (segments === undefined) return {kind: 'bad-path'};
-  return {kind: 'file', relativePath: path.join(VENDOR_DIR, ...segments), rootDir: webDir};
+  return {kind: 'file', relativePath: path.join(staticFolder.folder, ...segments), rootDir: webDir};
 }
 
 function isInside(parentDir: string, candidate: string): boolean {

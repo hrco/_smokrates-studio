@@ -245,6 +245,33 @@ describe('episode routes', () => {
   });
 });
 
+describe('publishes.list', () => {
+  it('lists the publish rows of one week and validates weekStart', async () => {
+    await importWeek();
+    sandbox.db
+      .prepare(
+        "INSERT INTO publishes (id, episode_id, platform, status, created_at_ms, external_id, last_checked_at_ms) VALUES ('p', 'ep-1', 'tiktok', 'sent', 1, 'pub-9', 1792990800000)",
+      )
+      .run();
+
+    const reply = await send({path: '/api/publishes?weekStart=2026-10-26'});
+    expect(reply.status).toBe(200);
+    expect(JSON.parse(reply.body)).toEqual([
+      {
+        id: 'p',
+        episodeId: 'ep-1',
+        platform: 'tiktok',
+        status: 'sent',
+        attempts: 0,
+        externalId: 'pub-9',
+        lastCheckedAt: '2026-10-26T06:00:00+01:00',
+      },
+    ]);
+    expect(JSON.parse((await send({path: '/api/publishes?weekStart=2026-11-02'})).body)).toEqual([]);
+    expect((await send({path: '/api/publishes'})).status).toBe(400);
+  });
+});
+
 describe('request guards', () => {
   it('refuses a Host header that is not loopback on this port', async () => {
     expect((await send({path: '/api/health', headers: {Host: 'evil.example'}})).status).toBe(421);
