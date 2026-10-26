@@ -213,16 +213,26 @@ paths:
   /api/tick:
     post:
       operationId: tick.run
-      summary: Called by launchd every 15 minutes. Sends due, approved episodes. Idempotent.
+      summary: Called by launchd every 15 minutes. Checks processing publishes, then sends at most one due approved episode. Idempotent.
       responses:
         "202":
-          description: Work was queued.
+          description: A send job ran. The row is succeeded or failed. Nothing else was sent.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Job"
+                $ref: "#/components/schemas/TickAccepted"
         "200":
-          description: Nothing is due.
+          description: Nothing was sent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TickIdle"
+        "409":
+          description: A send is already running.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         default:
           $ref: "#/components/responses/Error"
   /api/connections:
@@ -483,6 +493,24 @@ components:
         createdAt:
           type: string
           format: date-time
+    TickAccepted:
+      type: object
+      required: [jobId]
+      properties:
+        jobId:
+          type: string
+          description: The send job. Read it with job.get.
+    TickIdle:
+      type: object
+      required: [status, reason]
+      properties:
+        status:
+          type: string
+          enum: [idle]
+        reason:
+          type: string
+          enum: [nothing-due, already-sent-today, share-cap-reached, tiktok-not-connected]
+          description: Why no episode was sent.
     Connection:
       type: object
       description: Derived from the token files. Not stored.

@@ -29,7 +29,8 @@ export function parseByteRange(header: string | undefined, sizeBytes: number): B
   return {kind: 'partial', start, end};
 }
 
-async function resolveRenderFile(options: {storedPath: string; outDir: string}): Promise<string | undefined> {
+/** Resolves a stored render path to a real file inside outDir. Anything else, including a symlink escape, is undefined. */
+export async function resolveRenderFile(options: {storedPath: string; outDir: string}): Promise<string | undefined> {
   const {storedPath, outDir} = options;
   try {
     const realOutDir = await realpath(outDir);
