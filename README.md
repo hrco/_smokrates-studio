@@ -8,7 +8,7 @@ Makes short vertical videos for the Smokrates music project and sends them to Ti
 | --- | --- |
 | `npm install` | Install dependencies. |
 | `npm run studio` | Open Remotion Studio to preview compositions. |
-| `SMOK_STUDIO_DIR=/path/to/Smokrates npm run render -- <slug>` | Render a track to out/ as mp4 plus a caption JSON. Options: --start, --background, --stills. |
+| `SMOK_STUDIO_DIR=/path/to/Smokrates npm run render -- <slug> --label label_on|label_off` | Render a track to out/ as mp4 plus a caption JSON. Options: --start, --background, --stills. |
 | `npm run render:demo` | Render the TikTok app review demo video. |
 | `npm run tiktok:auth` | Sign in to TikTok once. |
 | `npm run tiktok:draft -- out/<file>.mp4` | Upload a rendered video to the TikTok inbox. |

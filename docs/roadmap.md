@@ -5,7 +5,7 @@ The plan is in `docs/project-guidelines.md`. It is cut to a Grok kill-gate, one 
 
 ## Phase 1: render queue (built)
 - `npm run render -- <slug>` renders a 15 s 9:16 video into `out/`.
-- A caption JSON sits next to each video: caption draft, hashtags, `aiGenerated: true`.
+- A caption JSON sits next to each video: caption draft, hashtags, `labelDecision` (`label_on` or `label_off`, set with `--label`).
 - Upload is manual. The human taps publish.
 
 ## Phase 1a: Grok CLI asset generation (cycle 1; the kill-gate passed on 14 October 2026)
