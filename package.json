@@ -16,7 +16,9 @@
     "tiktok:draft": "tsx scripts/tiktok-upload-draft.ts",
     "deploy:site": "bash scripts/deploy-site.sh deploy",
     "tiktok:status": "tsx scripts/tiktok-status.ts",
-    "studio:db:migrate": "tsx scripts/studio-db-migrate.ts"
+    "studio:db:migrate": "tsx scripts/studio-db-migrate.ts",
+    "studio:daemon": "tsx scripts/studio-daemon.ts",
+    "studio:attach-render": "tsx scripts/studio-attach-render.ts"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.535",
