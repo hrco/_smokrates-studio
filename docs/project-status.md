@@ -24,8 +24,6 @@ Ordered, cycle 1. Each item is one slice and one pull request.
 
 Open follow-ups from the review:
 
-- Migrations re-read the applied versions only before the first transaction. If the migrate script and the daemon open the database at the same moment, the second fails with "table exists". Only the daemon opens the database, so this waits. Fix: check the version again inside `BEGIN IMMEDIATE`.
-
 - The tiktok-auth error paths call process.exit from the handler. They can leave the server up. Close the server first.
 - The VPS host must come from the environment. `scripts/deploy-site.sh` now requires VPS_HOST.
 

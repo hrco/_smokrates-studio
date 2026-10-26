@@ -1,9 +1,10 @@
 import {mkdtemp, rm, stat} from 'node:fs/promises';
+import {mkdtempSync, rmSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import os from 'node:os';
 import path from 'node:path';
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
-import {MIGRATIONS} from '../src/store/migrations';
+import {type Migration, MIGRATIONS} from '../src/store/migrations';
 import {applyPendingMigrations, openStudioDb} from '../src/store/studioDb';
 
 const EXPECTED_TABLES = [
@@ -226,5 +227,62 @@ describe('initial schema constraints', () => {
     db.prepare("UPDATE jobs SET status = 'succeeded' WHERE id = 'job-1'").run();
 
     expect(() => insertJob(db, {id: 'job-2', kind: 'render', status: 'running'})).not.toThrow();
+  });
+});
+
+describe('applyPendingMigrations – stale pre-read (concurrent connections)', () => {
+  const v1: Migration = {version: 1, name: 'init', sql: 'CREATE TABLE one (id INTEGER)'};
+  const v2: Migration = {version: 2, name: 'second', sql: 'CREATE TABLE two (id INTEGER)'};
+
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(path.join(os.tmpdir(), 'studio-db-concurrent-'));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, {recursive: true, force: true});
+  });
+
+  it('skips a version already applied by another connection and does not throw', () => {
+    const dbPath = path.join(tempDir, 'race.db');
+
+    // Connection A applies v1 and commits.
+    const dbA = new DatabaseSync(dbPath);
+    dbA.exec('PRAGMA journal_mode = WAL');
+    applyPendingMigrations(dbA, [v1]);
+    dbA.close();
+
+    // Connection B has a stale pre-read: it read schema_migrations before A committed
+    // and saw an empty list. Simulate that by passing [] as the pre-read list.
+    const dbB = new DatabaseSync(dbPath);
+    dbB.exec('PRAGMA journal_mode = WAL');
+    // Must not throw even though B thinks v1 is pending.
+    const applied = applyPendingMigrations(dbB, [v1], []);
+
+    expect(applied).toEqual([]);
+    // v1 is in the table exactly once.
+    expect(dbB.prepare('SELECT count(*) AS n FROM schema_migrations').get()).toMatchObject({n: 1});
+    dbB.close();
+  });
+
+  it('applies a genuinely pending version and records it once when pre-read is stale', () => {
+    const dbPath = path.join(tempDir, 'partial.db');
+
+    // Connection A applies v1 only.
+    const dbA = new DatabaseSync(dbPath);
+    dbA.exec('PRAGMA journal_mode = WAL');
+    applyPendingMigrations(dbA, [v1]);
+    dbA.close();
+
+    // Connection B has a stale pre-read (saw nothing applied) but v2 is genuinely new.
+    const dbB = new DatabaseSync(dbPath);
+    dbB.exec('PRAGMA journal_mode = WAL');
+    const applied = applyPendingMigrations(dbB, [v1, v2], []);
+
+    // v1 skipped (already applied), v2 applied.
+    expect(applied).toEqual([2]);
+    expect(dbB.prepare('SELECT count(*) AS n FROM schema_migrations').get()).toMatchObject({n: 2});
+    dbB.close();
   });
 });
