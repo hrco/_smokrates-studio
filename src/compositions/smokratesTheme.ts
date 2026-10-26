@@ -2,6 +2,8 @@ export const NAVY_GROUND = '#0b1030';
 export const CREAM_TEXT = '#f3e9d2';
 export const NEON_CYAN = '#2fe6ff';
 export const NEON_PURPLE = '#a64dff';
+export const BAR_GOLD = '#f6e7a1';
+export const BAR_PEACH = '#f2a97a';
 export const WARM_SKIN = '#e0a47c';
 
 export const NEON_TEXT_SHADOW = [

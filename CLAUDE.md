@@ -5,7 +5,7 @@ Automated Smokrates TikTok studio: renders at most one vertical motion video a d
 ## Commands
 - install: `npm install`
 - preview: `npm run studio`
-- render: `SMOK_STUDIO_DIR=/path/to/Smokrates npm run render -- <slug> [--start <seconds>] [--background <clip>] [--stills]` -> `out/<date>-<slug>.mp4` + `.json` caption draft
+- render: `SMOK_STUDIO_DIR=/path/to/Smokrates npm run render -- <slug> [--format reel|card] [--start <seconds>] [--duration <seconds>] [--intro <clip>] [--loop <clip>] [--still <png>] [--stills [--stills-only] [--safe-zone]]` -> `out/<date>-<slug>.mp4` + `.json` caption draft. Default format is the 16 s TrackReel; `--format card` is the old TrackCard and takes `--background <clip>`. `--stills` writes PNGs at 0, 7 and 14 s; `--safe-zone` tints the unsafe strips on those stills only.
 - tiktok auth (once): `npm run tiktok:auth`; upload a draft to the TikTok inbox: `npm run tiktok:draft -- out/<file>.mp4` (needs `TIKTOK_CLIENT_KEY`/`TIKTOK_CLIENT_SECRET` in `.env`; see `docs/tiktok-setup.md`)
 - gate: `npm run typecheck && npm test`
 
@@ -38,6 +38,10 @@ npm run typecheck && npm test && bash scripts/check-docs.sh
 - Roadmap: `docs/roadmap.md`.
 
 ## Gotchas
+- Reel short line, in order: `shortLine` in song.json, the `Short line: X.` sentence in song.json `art.cover`, then the title uppercased without the words Groove, Track, Mix, Remix, Version.
+- Reel key text stays out of the top 250 px, bottom 640 px and right 130 px. The audio bars sit in the bottom strip on purpose: they are decoration, not information.
+- Reel fonts (Anton, Bebas Neue) load from Google Fonts at render time, so a render needs a network.
+- A cover-only reel hides the lettering printed on the cover under a navy fade. Real clips or a 9:16 still look better.
 - The GitHub repo is public: no media, no `.env`, no `out/` ever committed (all ignored).
 - Render with concurrency 2: the laptop has 8 GB RAM.
 - Remotion license is free for individuals and companies of up to 3 people.

@@ -13,6 +13,7 @@ The product is for one user on one laptop. It has no accounts and no public web 
 | Part | State |
 | --- | --- |
 | Remotion render of one track (TrackCard) | Exists |
+| Remotion reel of one track (TrackReel): full-bleed clip or art, one wordmark, music-reactive bars, film finish, 1080x1920, 16 s | Exists. The default of `npm run render`. |
 | TikTok sign-in (PKCE) and inbox draft upload | Exists. Proven in the sandbox. |
 | Public site on the Oracle box, and its deploy script | Exists |
 | Review demo video (ReviewDemo) | Exists |

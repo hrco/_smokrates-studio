@@ -6,6 +6,12 @@ import {
   ReviewDemo,
   type ReviewDemoProps,
 } from './compositions/ReviewDemo';
+import {
+  calculateTrackReelMetadata,
+  TrackReel,
+  type TrackReelProps,
+} from './compositions/reel/TrackReel';
+import {calculateReelDurationFrames} from './compositions/reel/reelTimeline';
 import {TrackCard, type TrackCardProps} from './compositions/TrackCard';
 import {calculateReviewDemoFrames, REVIEW_DEMO_FPS} from './demo/reviewDemoTimeline';
 import {
@@ -16,11 +22,19 @@ import {
 } from './compositions/smokratesTheme';
 
 export const TRACK_CARD_COMPOSITION_ID = 'TrackCard';
+export const TRACK_REEL_COMPOSITION_ID = 'TrackReel';
 export const REVIEW_DEMO_COMPOSITION_ID = 'ReviewDemo';
 
 const previewProps: TrackCardProps = {
   title: 'Golden Hour Groove',
   theme: 'Warm golden-hour funky dub that flows without drops',
+  coverSrc: 'media/preview/cover.png',
+  audioSrc: 'media/preview/track.mp3',
+  audioStartSeconds: 0,
+};
+
+const reelPreviewProps: TrackReelProps = {
+  shortLine: 'GOLDEN HOUR',
   coverSrc: 'media/preview/cover.png',
   audioSrc: 'media/preview/track.mp3',
   audioStartSeconds: 0,
@@ -41,6 +55,16 @@ export const RemotionRoot: React.FC = () => (
       fps={VIDEO_FPS}
       durationInFrames={VIDEO_DURATION_FRAMES}
       defaultProps={previewProps}
+    />
+    <Composition
+      id={TRACK_REEL_COMPOSITION_ID}
+      component={TrackReel}
+      width={VIDEO_WIDTH_PX}
+      height={VIDEO_HEIGHT_PX}
+      fps={VIDEO_FPS}
+      durationInFrames={calculateReelDurationFrames(undefined, VIDEO_FPS)}
+      defaultProps={reelPreviewProps}
+      calculateMetadata={calculateTrackReelMetadata}
     />
     <Composition
       id={REVIEW_DEMO_COMPOSITION_ID}
