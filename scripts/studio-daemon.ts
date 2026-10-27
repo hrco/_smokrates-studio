@@ -3,24 +3,20 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
-import {existsSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {loadProjectEnv} from '../src/daemon/loadProjectEnv';
 import {DAEMON_HOST, readDaemonConfig} from '../src/daemon/readDaemonConfig';
 import {resolveTickActions} from '../src/daemon/resolveTickActions';
 import {createStudioServer} from '../src/daemon/studioServer';
 import {failInterruptedSends} from '../src/publish/tickSelection';
 import {openStudioDb} from '../src/store/studioDb';
 
-function loadDotEnv(): void {
-  if (existsSync('.env')) process.loadEnvFile('.env');
-}
-
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function main(): void {
-  loadDotEnv();
+  loadProjectEnv(PROJECT_ROOT);
   const configResult = readDaemonConfig(process.env);
   if (!configResult.ok) {
     console.error(`studio-daemon: ${configResult.message}`);
