@@ -2,6 +2,9 @@ import type {DatabaseSync} from 'node:sqlite';
 import {ljubljanaDayStartMs, nextLjubljanaDayStartMs} from '../time/ljubljanaTime';
 import {runInTransaction} from '../store/withTransaction';
 
+const STALE_NIGHT_AFTER_MS = 24 * 60 * 60 * 1000;
+const MAX_FAILED_SENDS = 3;
+
 export type BeginSendResult =
   | {kind: 'busy'}
   | {kind: 'idle'; reason: 'nothing-due' | 'already-sent-today'}
@@ -13,11 +16,15 @@ function readCount(value: unknown): number {
   throw new Error('count-publishes-today: count is not a number');
 }
 
-function hasRunningSendJob(db: DatabaseSync): boolean {
+/** True when a send is already running. A render may run at the same time; this is only the send slot. */
+export function hasRunningSendJob(db: DatabaseSync): boolean {
   return db.prepare("SELECT 1 AS found FROM jobs WHERE kind = 'send' AND status = 'running' LIMIT 1").get() !== undefined;
 }
 
-/** The oldest approved, due, rendered episode whose plan is approved and which has no publish row. */
+/**
+ * The oldest approved, due, rendered night whose plan is approved and which has no publish row.
+ * A night more than 24 hours late is left, and so is a night that already has three failed sends.
+ */
 function findDueEpisodeId(db: DatabaseSync, nowMs: number): string | undefined {
   const row = db
     .prepare(
@@ -27,12 +34,17 @@ function findDueEpisodeId(db: DatabaseSync, nowMs: number): string | undefined {
        WHERE e.status = 'approved'
          AND p.status = 'approved'
          AND e.publish_at_ms <= ?
+         AND e.publish_at_ms >= ?
          AND EXISTS (SELECT 1 FROM renders r WHERE r.episode_id = e.id)
          AND NOT EXISTS (SELECT 1 FROM publishes pub WHERE pub.episode_id = e.id)
+         AND (
+           SELECT COUNT(*) FROM jobs j
+           WHERE j.episode_id = e.id AND j.kind = 'send' AND j.status = 'failed'
+         ) < ?
        ORDER BY e.publish_at_ms, e.night, e.id
        LIMIT 1`,
     )
-    .get(nowMs);
+    .get(nowMs, nowMs - STALE_NIGHT_AFTER_MS, MAX_FAILED_SENDS);
   if (row === undefined) return undefined;
   if (typeof row.id !== 'string') throw new Error('find-due-episode: id is not text');
   return row.id;
