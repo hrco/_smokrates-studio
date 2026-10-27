@@ -93,6 +93,7 @@ The daemon is the only writer. Workers are its children and report back to it. T
 - Dates and times use the Europe/Ljubljana timezone, for the week start and the publish time.
 - No agent taps Post or sets a video public. Nothing is sent before the Creator approves the week.
 - A render and an asset run never run at the same time. The daemon enforces this. The laptop has 8 GB.
+- A send may run beside a render. Sending is network work, not CPU, so the tick keeps its own running-send check and does not take the render and asset mutex. A second tick during a send does nothing else: no status fetch and no token refresh.
 - Secrets live in `.env`. Names live in `.env.example`.
 
 ## Data

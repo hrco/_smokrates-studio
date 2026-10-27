@@ -172,6 +172,7 @@ async function handleTick({deps, res}: RouteContext): Promise<void> {
     db: deps.db,
     nowMs,
     newId: deps.newId,
+    hasStoredToken: () => tick.hasStoredToken(),
     checkPublishes: () => tick.checkPublishes(nowMs),
     sendEpisode: (episodeId) => tick.sendEpisode({episodeId, nowMs, newId: deps.newId}),
   });

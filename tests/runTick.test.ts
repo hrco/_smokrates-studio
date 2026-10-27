@@ -2,6 +2,7 @@ import type {DatabaseSync} from 'node:sqlite';
 import {describe, expect, it, vi} from 'vitest';
 import {runTick, type RunTickResult} from '../src/publish/runTick';
 import {failInterruptedSends} from '../src/publish/tickSelection';
+import {sendEpisodeToTikTok} from '../src/publish/sendEpisodeToTikTok';
 import type {CheckTikTokPublishesSummary} from '../src/publish/checkTikTokPublishes';
 import type {SendEpisodeToTikTokResult} from '../src/publish/sendEpisodeToTikTok';
 import {openStudioDb} from '../src/store/studioDb';
@@ -70,17 +71,47 @@ async function tick(
   options: {
     checkPublishes?: () => Promise<CheckTikTokPublishesSummary>;
     sendEpisode?: (episodeId: string) => Promise<SendEpisodeToTikTokResult>;
+    hasStoredToken?: () => Promise<boolean>;
     nowMs?: number;
+    ids?: {next: number};
   } = {},
 ): Promise<RunTickResult> {
-  let nextId = 0;
+  const ids = options.ids ?? {next: 0};
   return runTick({
     db,
     nowMs: options.nowMs ?? NOW_MS,
-    newId: () => `job-${++nextId}`,
+    newId: () => `job-${++ids.next}`,
+    hasStoredToken: options.hasStoredToken ?? (async () => true),
     checkPublishes: options.checkPublishes ?? (async () => idleSummary),
     sendEpisode: options.sendEpisode ?? (async () => ({kind: 'sent-to-tiktok', publishId: 'pub-new'})),
   });
+}
+
+function countPublishes(db: DatabaseSync): number {
+  const row = db.prepare('SELECT COUNT(*) AS count FROM publishes').get();
+  if (row === undefined) throw new Error('count-publishes: no row');
+  if (typeof row.count === 'number') return row.count;
+  if (typeof row.count === 'bigint') return Number(row.count);
+  throw new Error('count-publishes: count is not a number');
+}
+
+function inboxSend(db: DatabaseSync, fetchFn: typeof fetch): (episodeId: string) => Promise<SendEpisodeToTikTokResult> {
+  let nextRow = 0;
+  const videoBytes = new Uint8Array([1, 2, 3]);
+  return (episodeId) =>
+    sendEpisodeToTikTok({
+      db,
+      episodeId,
+      videoBytes,
+      accessToken: 'token',
+      fetchFn,
+      nowMs: NOW_MS,
+      newId: () => `publish-${episodeId}-${++nextRow}`,
+    });
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json'}});
 }
 
 describe('runTick', () => {
@@ -292,13 +323,104 @@ describe('runTick', () => {
       `INSERT INTO jobs (id, kind, episode_id, status, created_at_ms, updated_at_ms)
        VALUES ('job-running', 'send', 'ep-1', 'running', 1, 1)`,
     ).run();
+    const hasStoredToken = vi.fn(async () => true);
     const checkPublishes = vi.fn(async () => idleSummary);
     const sendEpisode = vi.fn(async () => ({kind: 'sent-to-tiktok' as const, publishId: 'pub-new'}));
 
-    const result = await tick(db, {checkPublishes, sendEpisode});
+    const result = await tick(db, {hasStoredToken, checkPublishes, sendEpisode});
 
     expect(result).toEqual({kind: 'busy'});
-    expect(checkPublishes).toHaveBeenCalledTimes(1);
+    expect(hasStoredToken).not.toHaveBeenCalled();
+    expect(checkPublishes).not.toHaveBeenCalled();
     expect(sendEpisode).not.toHaveBeenCalled();
+  });
+
+  it('sends while a render is running, because a send is not the render mutex', async () => {
+    const db = openDb();
+    seedEpisode(db);
+    db.prepare(
+      `INSERT INTO jobs (id, kind, episode_id, status, created_at_ms, updated_at_ms)
+       VALUES ('job-render', 'render', 'ep-1', 'running', 1, 1)`,
+    ).run();
+
+    const result = await tick(db);
+
+    expect(result).toMatchObject({kind: 'sent', episodeId: 'ep-1'});
+  });
+
+  it('stays idle and creates no job when no TikTok token is stored', async () => {
+    const db = openDb();
+    seedEpisode(db);
+    const hasStoredToken = vi.fn(async () => false);
+    const checkPublishes = vi.fn(async () => idleSummary);
+    const sendEpisode = vi.fn(async () => ({kind: 'sent-to-tiktok' as const, publishId: 'pub-new'}));
+
+    const result = await tick(db, {hasStoredToken, checkPublishes, sendEpisode});
+
+    expect(result).toEqual({kind: 'idle', reason: 'tiktok-not-connected'});
+    expect(hasStoredToken).toHaveBeenCalledTimes(1);
+    expect(checkPublishes).not.toHaveBeenCalled();
+    expect(sendEpisode).not.toHaveBeenCalled();
+    expect(readJobs(db)).toEqual([]);
+  });
+
+  it('sends the night on the next tick when init fails with a network error', async () => {
+    const db = openDb();
+    seedEpisode(db);
+    let calls = 0;
+    const fetchFn = vi.fn<typeof fetch>(async (_url, init) => {
+      calls += 1;
+      if (calls === 1) throw new Error('network down');
+      if (init?.method === 'PUT') return new Response(null, {status: 201});
+      return jsonResponse({
+        data: {publish_id: 'pub-1', upload_url: 'https://upload.example/secret-path'},
+        error: {code: 'ok', message: '', log_id: 'log-1'},
+      });
+    });
+    const sendEpisode = inboxSend(db, fetchFn);
+    const ids = {next: 0};
+
+    const failed = await tick(db, {sendEpisode, ids});
+
+    expect(failed).toMatchObject({kind: 'failed', episodeId: 'ep-1'});
+    expect(countPublishes(db)).toBe(0);
+    expect(readJobs(db)).toEqual([
+      expect.objectContaining({id: 'job-1', status: 'failed', episode_id: 'ep-1'}),
+    ]);
+
+    const retried = await tick(db, {sendEpisode, ids});
+
+    expect(retried).toMatchObject({kind: 'sent', episodeId: 'ep-1'});
+    expect(countPublishes(db)).toBe(1);
+  });
+
+  it('keeps the publish row and does not resend when the upload fails after init', async () => {
+    const db = openDb();
+    seedEpisode(db);
+    let calls = 0;
+    const fetchFn = vi.fn<typeof fetch>(async () => {
+      calls += 1;
+      if (calls === 1) {
+        return jsonResponse({
+          data: {publish_id: 'pub-1', upload_url: 'https://upload.example/secret-path'},
+          error: {code: 'ok', message: '', log_id: 'log-1'},
+        });
+      }
+      if (calls === 2) return new Response(null, {status: 500});
+      throw new Error('tiktok was called again');
+    });
+    const sendEpisode = inboxSend(db, fetchFn);
+    const ids = {next: 0};
+
+    const failed = await tick(db, {sendEpisode, ids});
+
+    expect(failed).toMatchObject({kind: 'failed', episodeId: 'ep-1'});
+    const publish = db.prepare("SELECT status, external_id FROM publishes WHERE episode_id = 'ep-1'").get();
+    expect(publish).toMatchObject({status: 'failed', external_id: 'pub-1'});
+
+    const second = await tick(db, {sendEpisode, ids});
+
+    expect(second).toEqual({kind: 'idle', reason: 'nothing-due'});
+    expect(calls).toBe(2);
   });
 });

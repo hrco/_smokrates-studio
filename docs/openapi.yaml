@@ -213,7 +213,7 @@ paths:
   /api/tick:
     post:
       operationId: tick.run
-      summary: Called by launchd every 15 minutes. Checks processing publishes, then sends at most one due approved episode. Idempotent.
+      summary: Called by launchd every 15 minutes. When no send is running, checks processing publishes, then sends at most one due approved episode that is not more than 24 hours late. Idempotent.
       responses:
         "202":
           description: A send job ran. The row is succeeded or failed. Nothing else was sent.
@@ -510,7 +510,7 @@ components:
         reason:
           type: string
           enum: [nothing-due, already-sent-today, tiktok-not-connected]
-          description: Why no episode was sent. Share cap reached returns 202 with a failed job id.
+          description: Why no episode was sent. tiktok-not-connected means the client credentials or the stored token are missing, and no job is created. Share cap reached returns 202 with a failed job id.
     Connection:
       type: object
       description: Derived from the token files. Not stored.

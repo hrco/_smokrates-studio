@@ -83,7 +83,7 @@ afterEach(async () => {
 describe('tick.run', () => {
   it('returns 202 and the job id when a send starts', async () => {
     const sendEpisode = vi.fn<TickActions['sendEpisode']>(async () => ({kind: 'sent-to-tiktok', publishId: 'pub-1'}));
-    sandbox = await start({checkPublishes: idleCheck, sendEpisode});
+    sandbox = await start({hasStoredToken: async () => true, checkPublishes: idleCheck, sendEpisode});
     seedDueEpisode(sandbox.db);
 
     const reply = await send({path: '/api/tick'});
@@ -95,6 +95,7 @@ describe('tick.run', () => {
 
   it('returns 200 idle when nothing is due', async () => {
     sandbox = await start({
+      hasStoredToken: async () => true,
       checkPublishes: idleCheck,
       sendEpisode: async () => ({kind: 'sent-to-tiktok', publishId: 'pub-1'}),
     });
@@ -105,7 +106,7 @@ describe('tick.run', () => {
     expect(JSON.parse(reply.body)).toEqual({status: 'idle', reason: 'nothing-due'});
   });
 
-  it('returns 409 while a send is still running', async () => {
+  it('returns 409 while a send is still running and does not check TikTok again', async () => {
     let releaseSend: () => void = () => {};
     const sendGate = new Promise<void>((resolve) => {
       releaseSend = resolve;
@@ -114,8 +115,11 @@ describe('tick.run', () => {
     const started = new Promise<void>((resolve) => {
       markStarted = resolve;
     });
+    const hasStoredToken = vi.fn(async () => true);
+    const checkPublishes = vi.fn(idleCheck);
     sandbox = await start({
-      checkPublishes: idleCheck,
+      hasStoredToken,
+      checkPublishes,
       sendEpisode: async () => {
         markStarted();
         await sendGate;
@@ -133,6 +137,8 @@ describe('tick.run', () => {
     expect(second.status).toBe(409);
     expect(JSON.parse(second.body)).toEqual({code: 'tick_busy', message: 'A send is already running.'});
     expect(finished.status).toBe(202);
+    expect(hasStoredToken).toHaveBeenCalledTimes(1);
+    expect(checkPublishes).toHaveBeenCalledTimes(1);
   });
 
   it('returns idle tiktok-not-connected when credentials are missing', () => {
@@ -140,7 +146,7 @@ describe('tick.run', () => {
     expect(resolveTickActions({env: {}, db, outDir: '/tmp/studio-tick-out'})).toBeUndefined();
   });
 
-  it('builds tick actions from credentials without calling fetch', () => {
+  it('builds tick actions from credentials without calling fetch', async () => {
     const {db} = openStudioDb({dbPath: ':memory:'});
     const fetchFn = vi.fn<typeof fetch>();
     const actions = resolveTickActions({
@@ -157,10 +163,39 @@ describe('tick.run', () => {
     });
     expect(actions).toBeDefined();
     expect(fetchFn).not.toHaveBeenCalled();
+    expect(await actions?.hasStoredToken()).toBe(false);
+  });
+
+  it('reports a stored token without calling fetch', async () => {
+    const {db} = openStudioDb({dbPath: ':memory:'});
+    const fetchFn = vi.fn<typeof fetch>();
+    const actions = resolveTickActions({
+      env: {TIKTOK_CLIENT_KEY: 'key', TIKTOK_CLIENT_SECRET: 'secret'},
+      db,
+      outDir: '/tmp/studio-tick-out',
+      fetchFn,
+      tokenStore: {
+        async load() {
+          return {
+            accessToken: 'access',
+            refreshToken: 'refresh',
+            accessExpiresAt: NOW_MS + 60_000,
+            refreshExpiresAt: NOW_MS + 60_000,
+            openId: 'open-1',
+            scope: 'video.upload',
+          };
+        },
+        async save() {},
+      },
+    });
+
+    expect(await actions?.hasStoredToken()).toBe(true);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it('returns 202 and the job id when the share cap refuses the send', async () => {
     sandbox = await start({
+      hasStoredToken: async () => true,
       checkPublishes: idleCheck,
       sendEpisode: async () => ({kind: 'share-cap-reached', inFlightShares: 5}),
     });
@@ -172,6 +207,23 @@ describe('tick.run', () => {
     expect(JSON.parse(reply.body)).toEqual({jobId: 'id-1'});
     const job = sandbox.db.prepare('SELECT status, message FROM jobs WHERE id = ?').get('id-1');
     expect(job).toMatchObject({status: 'failed'});
+  });
+
+  it('returns 200 idle tiktok-not-connected and creates no job when no token is stored', async () => {
+    const hasStoredToken = vi.fn(async () => false);
+    const checkPublishes = vi.fn(idleCheck);
+    const sendEpisode = vi.fn<TickActions['sendEpisode']>(async () => ({kind: 'sent-to-tiktok', publishId: 'pub-1'}));
+    sandbox = await start({hasStoredToken, checkPublishes, sendEpisode});
+    seedDueEpisode(sandbox.db);
+
+    const reply = await send({path: '/api/tick'});
+
+    expect(reply.status).toBe(200);
+    expect(JSON.parse(reply.body)).toEqual({status: 'idle', reason: 'tiktok-not-connected'});
+    expect(hasStoredToken).toHaveBeenCalledTimes(1);
+    expect(checkPublishes).not.toHaveBeenCalled();
+    expect(sendEpisode).not.toHaveBeenCalled();
+    expect(sandbox.db.prepare('SELECT id FROM jobs').all()).toEqual([]);
   });
 
   it('answers 200 idle tiktok-not-connected and still starts without tick actions', async () => {

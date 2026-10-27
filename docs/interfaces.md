@@ -22,7 +22,7 @@ All dates and times use the Europe/Ljubljana timezone. This covers weekStart and
 | `canon.approve` | POST /api/canon | Admin | assets | canon | "That file is not a still." The old canon stays. |
 | `assets.list` | GET /api/assets | Creator, Admin | assets | nothing | "Could not read the stills." The picker stays closed. |
 | `health.get` | GET /api/health | Creator | daemon state | nothing | The page says "The daemon is down." |
-| `tick.run` | POST /api/tick | launchd | episodes, publishes | jobs, publishes | Returns 202 and a job id when a send starts. Returns 200 when nothing is sent, with status idle and a reason. Returns 409 when a send is already running. A failed tick sends nothing else. The next tick tries again. |
+| `tick.run` | POST /api/tick | launchd | episodes, publishes | jobs, publishes | Returns 202 and a job id when a send starts. Returns 200 when nothing is sent, with status idle and a reason. Returns 409 when a send is already running. A failed tick sends nothing else. The next tick tries that night again, and stops after three failed sends so a later night can go. A night whose publish time is more than 24 hours ago is not sent. When TikTok is not connected, the tick stays idle and creates no job. |
 | `connections.list` | GET /api/connections | Creator, Admin | token files (stat only) | nothing | "Could not read the connections." The page shows each platform as unknown. |
 | `publishes.list` | GET /api/publishes?weekStart= | Creator | publishes | nothing | "Could not read the publish log." The week still shows. |
 

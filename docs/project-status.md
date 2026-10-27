@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-10-26
+Updated: 2026-10-27
 
 ## Now
 
@@ -38,9 +38,9 @@ Open follow-ups from the review:
 
 Slice 6, the tick.
 
-- `POST /api/tick` checks processing publishes, then sends at most one approved night whose time has come, whose plan is approved, that has a render and no publish row.
-- One new publish row per Europe/Ljubljana day. A second tick while a send is running returns 409. A failed send marks the job failed and sends nothing else.
-- Missing TikTok credentials: the daemon still starts and the tick answers idle, because TikTok is not connected.
+- `POST /api/tick` sends at most one approved night whose time has come and is not more than 24 hours late, whose plan is approved, that has a render and no publish row. A night with three failed sends is skipped. Processing publishes are checked only when no send is already running.
+- One new publish row per Europe/Ljubljana day. A second tick while a send is running returns 409 and does not call TikTok. A failed send marks the job failed and sends nothing else. A failure before TikTok init deletes the publish row, so the next tick can try that night again.
+- Missing TikTok credentials, or no stored token file: the daemon still starts and the tick answers idle and creates no job.
 - The launchd template is in `ops/launchd/`. The human installs it with the commands in `docs/tick-setup.md`. It is not loaded from here.
 
 Not in this slice:

@@ -36,6 +36,11 @@ function tokenStoreFor(credentials: TikTokCredentials, tokenStore: TokenStore | 
   return createFileTokenStore(tokenPath);
 }
 
+async function hasSavedToken(tokenStore: TokenStore): Promise<boolean> {
+  const tokens = await tokenStore.load();
+  return tokens !== undefined;
+}
+
 function createActions(options: {
   db: DatabaseSync;
   outDir: string;
@@ -45,7 +50,8 @@ function createActions(options: {
   readVideoBytes: ResolveTickActionsOptions['readVideoBytes'];
 }): TickActions {
   const {db, credentials, fetchFn} = options;
-  const provider = createAccessTokenProvider(tokenStoreFor(credentials, options.tokenStore), (refreshToken) =>
+  const tokenStore = tokenStoreFor(credentials, options.tokenStore);
+  const provider = createAccessTokenProvider(tokenStore, (refreshToken) =>
     refreshAccessToken(
       {clientKey: credentials.clientKey, clientSecret: credentials.clientSecret, refreshToken},
       fetchFn,
@@ -55,6 +61,7 @@ function createActions(options: {
     options.readVideoBytes ?? ((episodeId: string) => readRenderBytes({db, outDir: options.outDir, episodeId}));
 
   return {
+    hasStoredToken: () => hasSavedToken(tokenStore),
     checkPublishes: (nowMs) => checkWithToken({db, nowMs, provider, fetchFn}),
     sendEpisode: (request) => sendWithToken({db, request, provider, fetchFn, readVideo}),
   };

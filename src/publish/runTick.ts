@@ -1,12 +1,14 @@
 import type {DatabaseSync} from 'node:sqlite';
 import type {CheckTikTokPublishesSummary} from './checkTikTokPublishes';
 import type {SendEpisodeToTikTokResult} from './sendEpisodeToTikTok';
-import {beginSendJob, finishSendJob} from './tickSelection';
+import {beginSendJob, finishSendJob, hasRunningSendJob} from './tickSelection';
 
 export type RunTickOptions = {
   db: DatabaseSync;
   nowMs: number;
   newId: () => string;
+  /** False when no token file is stored. The tick then stays idle and creates no job. */
+  hasStoredToken: () => Promise<boolean>;
   /** Settles processing TikTok rows before any new send. The daemon wires this to checkTikTokPublishes. */
   checkPublishes: () => Promise<CheckTikTokPublishesSummary>;
   /** Sends one episode. The daemon wires this to sendEpisodeToTikTok. Tests pass a fake. */
@@ -18,7 +20,7 @@ export type RunTickResult =
   | {kind: 'failed'; jobId: string; episodeId: string; message: string}
   | {kind: 'share-cap-reached'; jobId: string; episodeId: string; inFlightShares: number}
   | {kind: 'busy'}
-  | {kind: 'idle'; reason: 'nothing-due' | 'already-sent-today'};
+  | {kind: 'idle'; reason: 'nothing-due' | 'already-sent-today' | 'tiktok-not-connected'};
 
 type ReadySend = {db: DatabaseSync; nowMs: number; jobId: string; episodeId: string};
 
@@ -57,12 +59,16 @@ async function completeSend(ready: ReadySend, sendEpisode: RunTickOptions['sendE
 }
 
 /**
- * One launchd tick. Checks processing publishes first, then sends at most one approved episode
- * whose time has come, whose plan is approved, that has a render and no publish row.
- * At most one new publish row per Europe/Ljubljana day. A share cap or a failed upload is a result,
- * the job is marked failed, and no other episode is sent. The next tick tries again.
+ * One launchd tick. A running send answers busy before any token read or TikTok call.
+ * Otherwise it checks processing publishes, then sends at most one approved episode
+ * whose time has come, that is not more than 24 hours late, whose plan is approved,
+ * that has a render, no publish row, and fewer than three failed sends.
+ * No stored token stays idle and creates no job. At most one new publish row per Europe/Ljubljana day.
+ * A share cap or a failed upload marks the job failed and sends nothing else.
  */
 export async function runTick(options: RunTickOptions): Promise<RunTickResult> {
+  if (hasRunningSendJob(options.db)) return {kind: 'busy'};
+  if (!(await options.hasStoredToken())) return {kind: 'idle', reason: 'tiktok-not-connected'};
   await options.checkPublishes();
   const begun = beginSendJob(options.db, {nowMs: options.nowMs, newId: options.newId});
   if (begun.kind !== 'ready') return begun;
