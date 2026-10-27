@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>The week - Smokrates studio</title>
+  <link rel="stylesheet" href="/vendor/dnp-xiii/tokens.css">
+  <link rel="stylesheet" href="/vendor/dnp-xiii/components/bundle.css">
+  <link rel="stylesheet" href="/review.css">
+  <script type="module" src="/review.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the week</a>
+  <header class="week-header">
+    <h1 id="week-title">The week</h1>
+    <nav class="week-nav" aria-label="Week">
+      <button type="button" id="week-prev" class="n13-btn n13-btn--quiet">Previous week</button>
+      <span id="week-label" class="week-label"></span>
+      <button type="button" id="week-next" class="n13-btn n13-btn--quiet">Next week</button>
+    </nav>
+    <button type="button" id="week-approve" class="n13-btn">Approve week</button>
+    <p id="week-note" class="week-note"></p>
+    <p id="week-error" class="n13-balloon balloon--error" role="alert" hidden></p>
+  </header>
+  <main id="main" tabindex="-1">
+    <p id="week-state" class="week-state">Loading the week...</p>
+    <div id="panels" class="panels"></div>
+    <section id="publish-log" class="publish-log" aria-labelledby="publish-log-title" hidden>
+      <h2 id="publish-log-title">Publish log</h2>
+      <ul id="publish-list" class="publish-list"></ul>
+    </section>
+  </main>
+  <div id="live" class="visually-hidden" role="status" aria-live="polite"></div>
+</body>
+</html>

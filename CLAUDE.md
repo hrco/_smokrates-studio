@@ -5,7 +5,7 @@ Automated Smokrates TikTok studio: renders at most one vertical motion video a d
 ## Commands
 - install: `npm install`
 - preview: `npm run studio`
-- render: `SMOK_STUDIO_DIR=/path/to/Smokrates npm run render -- <slug> [--start <seconds>] [--background <clip>] [--stills]` -> `out/<date>-<slug>.mp4` + `.json` caption draft
+- render: `SMOK_STUDIO_DIR=/path/to/Smokrates npm run render -- <slug> --label label_on|label_off [--start <seconds>] [--background <clip>] [--stills]` -> `out/<date>-<slug>.mp4` + `.json` caption draft
 - tiktok auth (once): `npm run tiktok:auth`; upload a draft to the TikTok inbox: `npm run tiktok:draft -- out/<file>.mp4` (needs `TIKTOK_CLIENT_KEY`/`TIKTOK_CLIENT_SECRET` in `.env`; see `docs/tiktok-setup.md`)
 - gate: `npm run typecheck && npm test`
 
@@ -33,7 +33,7 @@ npm run typecheck && npm test && bash scripts/check-docs.sh
 - Assets are read-only from `~/Studio/Smokrates` (the smok-studio repo) via `SMOK_STUDIO_DIR`. Never write there. The render script copies cover/audio into ignored `public/media/<slug>/`.
 - Generated stills and clips come from the Grok CLI (SuperGrok flat fee; `image_edit` for stills, `reference_to_video` for clips at 720p max; clips carry sound, so compositions mute them) into ignored `assets/generated/`. Evidence: `docs/research/grok-day1-test.md`.
 - Agents never upload or publish. They make drafts; the human taps publish.
-- Label AI content on TikTok (`aiGenerated: true` in the sidecar JSON).
+- Label AI content on TikTok per episode: the Creator picks `label_on` or `label_off` (on only if a frame is photoreal). The sidecar JSON carries `labelDecision`; render requires `--label`.
 - One 9:16 master, hook in frame 1, something new every post. See `docs/research/reports`.
 - Roadmap: `docs/roadmap.md`.
 

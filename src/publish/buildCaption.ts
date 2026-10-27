@@ -1,3 +1,5 @@
+import type {LabelDecision} from '../store/planTypes';
+
 export const DEFAULT_HASHTAGS = ['#smokrates', '#chilldub', '#psydub', '#aimusic'] as const;
 
 const MAX_SHORT_LINE_LENGTH = 60;
@@ -7,7 +9,7 @@ export type PublishSidecar = {
   title: string;
   caption: string;
   hashtags: string[];
-  aiGenerated: true;
+  labelDecision: LabelDecision;
 };
 
 /**
@@ -28,7 +30,13 @@ export function toShortLine(theme: string): string {
   return wordSafe.replace(/[\s,;:-]+$/, '');
 }
 
-export function buildPublishSidecar(input: {slug: string; title: string; theme: string}): PublishSidecar {
+/** The label decision is the Creator's per-episode call: label_on only if a frame is photoreal. */
+export function buildPublishSidecar(input: {
+  slug: string;
+  title: string;
+  theme: string;
+  labelDecision: LabelDecision;
+}): PublishSidecar {
   const hashtags = [...DEFAULT_HASHTAGS];
   const firstLine = `${input.title} - ${toShortLine(input.theme)}`;
   return {
@@ -36,6 +44,6 @@ export function buildPublishSidecar(input: {slug: string; title: string; theme: 
     title: input.title,
     caption: `${firstLine}\n\n${hashtags.join(' ')}`,
     hashtags,
-    aiGenerated: true,
+    labelDecision: input.labelDecision,
   };
 }

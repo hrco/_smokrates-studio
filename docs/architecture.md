@@ -17,8 +17,8 @@ The product is for one user on one laptop. It has no accounts and no public web 
 | Public site on the Oracle box, and its deploy script | Exists |
 | Review demo video (ReviewDemo) | Exists |
 | SQLite store, jobs table, migrations | Implemented |
-| StudioDaemon | Planned (cycle 1) |
-| Review page | Planned (cycle 1) |
+| StudioDaemon | Built: serves the page and the plan, episode and publish API. Tick, render and jobs are planned. |
+| Review page | Built (cycle 1): the week screen. No render button yet. |
 | Tick with publish rows and the 5-share cap | Planned (cycle 1) |
 | Scene format | Planned (cycle 1). The Grok kill-gate passed on 14 October 2026. |
 | Showrunner, swap, Loop, Title, YouTube adapter | Deferred to cycle 2 |
@@ -54,7 +54,7 @@ Processes, data stores, and how they talk. C4 level 2.
 
 ```mermaid
 flowchart LR
-  browser[Review page<br/>built files, served by the daemon]
+  browser[Review page<br/>static files in web/, served by the daemon]
   tick[launchd tick<br/>every 15 min, POST /api/tick]
   daemon[StudioDaemon<br/>one Node process, 127.0.0.1:8724]
   db[(SQLite file<br/>studio-data/studio.db)]
@@ -71,12 +71,12 @@ flowchart LR
   pub --> tiktok
 ```
 
-The daemon is the only writer. Workers are its children and report back to it. The browser has one hop only: the daemon. In development, Vite serves the page and proxies `/api` to the daemon.
+The daemon is the only writer. Workers are its children and report back to it. The browser has one hop only: the daemon. There is no Vite and no build step: the daemon serves the static page from `web/` and the API on one port.
 
 | Container | What it does | State |
 | --- | --- | --- |
-| Review page | Shows the week as one comic page. Sends the Creator's choices to the API. | Planned |
-| StudioDaemon | Serves the page and `/api`. Validates input. Owns the database, the job queue, the asset and render mutex, the tick and token refresh. Binds 127.0.0.1 only. | Planned |
+| Review page | Shows the week as one comic page. Sends the Creator's choices to the API. | Built |
+| StudioDaemon | Serves the page and `/api`. Validates input. Owns the database, the job queue, the asset and render mutex, the tick and token refresh. Binds 127.0.0.1 only. | Built for the plan API. Jobs and tick planned. |
 | SQLite store | Source of truth for plans, episodes, assets, renders, jobs and publishes. Has a `schema_migrations` table. | Implemented |
 | Worker child | Renders an episode to a 9:16 mp4 with Remotion at concurrency 2, or runs the Grok CLI for a Scene. One at a time. | Render exists as a CLI (render-track). Planned as a child. |
 | launchd tick | Calls `POST /api/tick` every 15 minutes. The daemon sends due, approved episodes. | Planned |

@@ -295,6 +295,9 @@ components:
           type: string
         message:
           type: string
+        field:
+          type: string
+          description: The input field the message is about, when the failure is a bad value. The page keeps the typed value next to it.
     PlanImport:
       type: object
       required: [weekStart, episodes]

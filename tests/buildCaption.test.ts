@@ -23,15 +23,22 @@ describe('buildPublishSidecar', () => {
     slug: 'golden-hour-groove',
     title: 'Golden Hour Groove',
     theme: 'Warm golden-hour funky dub. Late.',
+    labelDecision: 'label_off',
   });
 
   it('starts the caption with the title and a hook', () => {
     expect(sidecar.caption.split('\n')[0]).toBe('Golden Hour Groove - Warm golden-hour funky dub');
   });
 
-  it('carries the fixed hashtags and the AI label', () => {
+  it('carries the fixed hashtags', () => {
     expect(sidecar.hashtags).toEqual(['#smokrates', '#chilldub', '#psydub', '#aimusic']);
-    expect(sidecar.aiGenerated).toBe(true);
     expect(sidecar.caption).toContain('#smokrates #chilldub #psydub #aimusic');
+  });
+
+  it('passes the label decision through instead of a fixed AI flag', () => {
+    expect(sidecar.labelDecision).toBe('label_off');
+    expect(sidecar).not.toHaveProperty('aiGenerated');
+    const labelled = buildPublishSidecar({slug: 's', title: 'T', theme: 'x', labelDecision: 'label_on'});
+    expect(labelled.labelDecision).toBe('label_on');
   });
 });

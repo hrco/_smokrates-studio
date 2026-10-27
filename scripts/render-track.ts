@@ -122,7 +122,7 @@ async function main(): Promise<void> {
   const outputBase = path.join(OUT_DIR, `${formatLocalDate(new Date())}-${track.slug}`);
   await renderVideoAndStills(props, args, outputBase);
 
-  const sidecar = buildPublishSidecar(track);
+  const sidecar = buildPublishSidecar({...track, labelDecision: args.labelDecision});
   await writeFile(`${outputBase}.json`, `${JSON.stringify(sidecar, null, 2)}\n`);
   console.log(`done: ${outputBase}.mp4 and ${outputBase}.json`);
 }

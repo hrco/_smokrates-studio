@@ -82,7 +82,12 @@ CREATE TABLE canon (
 );
 `;
 
+const GROKS_PROMPT_SQL = `
+ALTER TABLE episodes ADD COLUMN groks_prompt TEXT;
+`;
+
 /** Append-only. Never edit or reorder a released migration: add a new one. */
 export const MIGRATIONS: readonly Migration[] = [
   {version: 1, name: 'initial_schema', sql: INITIAL_SCHEMA_SQL},
+  {version: 2, name: 'episode_groks_prompt', sql: GROKS_PROMPT_SQL},
 ];

@@ -1,0 +1,56 @@
+/* DNP XIII: generated from tokens.json. Edit tokens.json, then regenerate. */
+:root {
+  --paper: #f4ecd8;
+  --paper-raised: #fffaf0;
+  --paper-sunk: #e8dcc0;
+  --line: #14110f;
+  --ink: #14110f;
+  --ink-muted: #4a423a;
+  --caption: #f2c230;
+  --on-caption: #14110f;
+  --accent: #1f4e8c;
+  --on-accent: #fffaf0;
+  --danger: #c1272d;
+  --on-danger: #fffaf0;
+  --halftone: #cdb98a;
+  --focus: var(--accent);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --radius-panel: 4px;
+  --radius-caption: 3px;
+  --radius-control: 6px;
+  --radius-balloon: 22px;
+  --radius-round: 999px;
+  --shadow-hard: 3px 4px 0 #14110f, 6px 8px 0 #cdb98a;
+  --shadow-hard-sm: 2px 3px 0 #14110f;
+  --stroke-heavy: 3px;
+  --stroke-medium: 2px;
+  --stroke-fine: 1px;
+  --font-display: "Bangers", "Impact", "Arial Narrow Bold", sans-serif;
+  --font-body: "Comic Neue", "Comic Sans MS", "Chalkboard SE", system-ui, sans-serif;
+  --font-mono: "Courier Prime", "Courier New", monospace;
+}
+
+[data-theme="dark"] {
+  --paper: #14171f;
+  --paper-raised: #1e2330;
+  --paper-sunk: #0d1017;
+  --line: #f1e8d2;
+  --ink: #f1e8d2;
+  --ink-muted: #b9ae96;
+  --caption: #f2c230;
+  --on-caption: #14110f;
+  --accent: #7fb2ff;
+  --on-accent: #14171f;
+  --danger: #ff6b5e;
+  --on-danger: #14110f;
+  --halftone: #2b3245;
+  --focus: var(--accent);
+  --shadow-hard: 3px 4px 0 #8f866f, 6px 8px 0 #2b3245;
+  --shadow-hard-sm: 2px 3px 0 #8f866f;
+}
