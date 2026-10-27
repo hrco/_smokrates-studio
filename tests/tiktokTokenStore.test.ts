@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {TikTokTokens} from '../src/tiktok/oauth';
-import {createFileTokenStore, getValidAccessToken} from '../src/tiktok/tokenStore';
+import {createAccessTokenProvider, createFileTokenStore, getValidAccessToken} from '../src/tiktok/tokenStore';
 
 const NOW_MS = 1_000_000_000_000;
 const MINUTE_MS = 60_000;
@@ -88,5 +88,60 @@ describe('getValidAccessToken', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('no-tokens');
+  });
+});
+
+describe('createAccessTokenProvider', () => {
+  it('shares one refresh between concurrent callers', async () => {
+    const store = createFileTokenStore(tokenPath);
+    await store.save(tokensExpiringIn(MINUTE_MS));
+    const rotated: TikTokTokens = {...tokensExpiringIn(60 * MINUTE_MS, 'access-new'), refreshToken: 'refresh-new'};
+    const refreshFn = vi.fn().mockResolvedValue({ok: true, value: rotated});
+    const provider = createAccessTokenProvider(store, refreshFn);
+
+    const results = await Promise.all([provider.getAccessToken(NOW_MS), provider.getAccessToken(NOW_MS)]);
+
+    expect(results).toEqual([
+      {ok: true, value: 'access-new'},
+      {ok: true, value: 'access-new'},
+    ]);
+    expect(refreshFn).toHaveBeenCalledTimes(1);
+    expect(await store.load()).toEqual(rotated);
+  });
+
+  it('does not refresh again once the new token is valid', async () => {
+    const store = createFileTokenStore(tokenPath);
+    await store.save(tokensExpiringIn(MINUTE_MS));
+    const rotated = tokensExpiringIn(60 * MINUTE_MS, 'access-new');
+    const refreshFn = vi.fn().mockResolvedValue({ok: true, value: rotated});
+    const provider = createAccessTokenProvider(store, refreshFn);
+
+    await provider.getAccessToken(NOW_MS);
+    const later = await provider.getAccessToken(NOW_MS + MINUTE_MS);
+
+    expect(later).toEqual({ok: true, value: 'access-new'});
+    expect(refreshFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a failed refresh to both callers and tries again on the next call', async () => {
+    const store = createFileTokenStore(tokenPath);
+    await store.save(tokensExpiringIn(MINUTE_MS));
+    const error = {operation: 'refresh-token', code: 'invalid_grant', detail: 'revoked'};
+    const rotated = tokensExpiringIn(60 * MINUTE_MS, 'access-new');
+    const refreshFn = vi
+      .fn()
+      .mockResolvedValueOnce({ok: false, error})
+      .mockResolvedValueOnce({ok: true, value: rotated});
+    const provider = createAccessTokenProvider(store, refreshFn);
+
+    const failed = await Promise.all([provider.getAccessToken(NOW_MS), provider.getAccessToken(NOW_MS)]);
+    const retried = await provider.getAccessToken(NOW_MS);
+
+    expect(failed).toEqual([
+      {ok: false, error},
+      {ok: false, error},
+    ]);
+    expect(retried).toEqual({ok: true, value: 'access-new'});
+    expect(refreshFn).toHaveBeenCalledTimes(2);
   });
 });

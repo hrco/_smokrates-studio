@@ -16,7 +16,8 @@ The product is for one user on one laptop. It has no accounts and no public web 
 | TikTok sign-in (PKCE) and inbox draft upload | Exists. Proven in the sandbox. |
 | Public site on the Oracle box, and its deploy script | Exists |
 | Review demo video (ReviewDemo) | Exists |
-| StudioDaemon, SQLite store, jobs, migrations | Planned (cycle 1) |
+| SQLite store, jobs table, migrations | Implemented |
+| StudioDaemon | Planned (cycle 1) |
 | Review page | Planned (cycle 1) |
 | Tick with publish rows and the 5-share cap | Planned (cycle 1) |
 | Scene format | Planned (cycle 1). The Grok kill-gate passed on 14 October 2026. |
@@ -76,7 +77,7 @@ The daemon is the only writer. Workers are its children and report back to it. T
 | --- | --- | --- |
 | Review page | Shows the week as one comic page. Sends the Creator's choices to the API. | Planned |
 | StudioDaemon | Serves the page and `/api`. Validates input. Owns the database, the job queue, the asset and render mutex, the tick and token refresh. Binds 127.0.0.1 only. | Planned |
-| SQLite store | Source of truth for plans, episodes, assets, renders, jobs and publishes. Has a `schema_migrations` table. | Planned |
+| SQLite store | Source of truth for plans, episodes, assets, renders, jobs and publishes. Has a `schema_migrations` table. | Implemented |
 | Worker child | Renders an episode to a 9:16 mp4 with Remotion at concurrency 2, or runs the Grok CLI for a Scene. One at a time. | Render exists as a CLI (render-track). Planned as a child. |
 | launchd tick | Calls `POST /api/tick` every 15 minutes. The daemon sends due, approved episodes. | Planned |
 | TikTok publisher adapter | Inbox draft upload. | Exists. Planned as a daemon module. |

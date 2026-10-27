@@ -77,3 +77,27 @@ export async function getValidAccessToken(
   await store.save(refreshed.value);
   return {ok: true, value: refreshed.value.accessToken};
 }
+
+export type AccessTokenProvider = {
+  getAccessToken(nowMs: number): Promise<TikTokResult<string>>;
+};
+
+/**
+ * Builds the one access-token source for a process. Callers that overlap share a single in-flight
+ * refresh, so TikTok's rotated refresh token is never spent twice.
+ * The daemon owns the only provider; scripts keep using getValidAccessToken.
+ */
+export function createAccessTokenProvider(store: TokenStore, refreshFn: RefreshFn): AccessTokenProvider {
+  let inFlightLookup: Promise<TikTokResult<string>> | undefined;
+
+  return {
+    getAccessToken(nowMs) {
+      if (inFlightLookup) return inFlightLookup;
+      const lookup = getValidAccessToken(store, refreshFn, nowMs).finally(() => {
+        inFlightLookup = undefined;
+      });
+      inFlightLookup = lookup;
+      return lookup;
+    },
+  };
+}
