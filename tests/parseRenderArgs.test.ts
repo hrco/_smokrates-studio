@@ -10,15 +10,21 @@ describe('parseRenderArgs', () => {
   });
 
   it('accepts a start of zero seconds', () => {
-    expect(parseRenderArgs(['golden-hour', '--start', '0'])).toEqual({
+    expect(parseRenderArgs(['golden-hour', '--label', 'label_on', '--start', '0'])).toEqual({
       ok: true,
-      args: {slug: 'golden-hour', audioStartSeconds: 0, backgroundPath: undefined, shouldRenderStills: false},
+      args: {
+        slug: 'golden-hour',
+        audioStartSeconds: 0,
+        backgroundPath: undefined,
+        shouldRenderStills: false,
+        labelDecision: 'label_on',
+      },
     });
   });
 
   it('rejects a non-finite start', () => {
-    expect(parseRenderArgs(['golden-hour', '--start', 'Infinity']).ok).toBe(false);
-    expect(parseRenderArgs(['golden-hour', '--start', 'NaN']).ok).toBe(false);
+    expect(parseRenderArgs(['golden-hour', '--label', 'label_on', '--start', 'Infinity']).ok).toBe(false);
+    expect(parseRenderArgs(['golden-hour', '--label', 'label_on', '--start', 'NaN']).ok).toBe(false);
   });
 
   it('parses options', () => {
