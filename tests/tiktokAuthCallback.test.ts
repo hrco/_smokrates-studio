@@ -168,6 +168,39 @@ describe('handleAuthCallback', () => {
     expect(JSON.stringify(result)).not.toContain(CLIENT_SECRET);
   });
 
+  it('redacts a longer secret before a shorter prefix so no token tail remains', async () => {
+    const code = 'auth-code-secret';
+    const exchangeCode = vi.fn<ExchangeCodeFn>().mockResolvedValue({
+      ok: false,
+      error: {operation: 'exchange-code', code: 'invalid_grant', detail: `rejected ${code}`},
+    });
+    const result = await handleAuthCallback(callbackUrl({state: EXPECTED_STATE, code}), {
+      expectedState: EXPECTED_STATE,
+      exchangeCode,
+      redactValues: ['auth-code', CLIENT_SECRET],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.terminalMessage).toBe('exchange-code: invalid_grant rejected [redacted]');
+    assertMessagesHide(result, [code, 'auth-code', CLIENT_SECRET]);
+  });
+
+  it('does not echo a non-Error rejection', async () => {
+    const exchangeCode = vi.fn<ExchangeCodeFn>().mockRejectedValue(`boom ${AUTH_CODE} ${CLIENT_SECRET}`);
+    const result = await handleAuthCallback(callbackUrl({state: EXPECTED_STATE, code: AUTH_CODE}), {
+      expectedState: EXPECTED_STATE,
+      exchangeCode,
+      redactValues: [CLIENT_SECRET],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.status).toBe(500);
+    expect(result.terminalMessage).toBe('exchange-code: failed token exchange failed');
+    assertMessagesHide(result, [AUTH_CODE, CLIENT_SECRET]);
+  });
+
   it('strips tokens that appear inside the scope log line', async () => {
     const tokens: TikTokTokens = {...fakeTokens, scope: `video.upload ${ACCESS_TOKEN} ${REFRESH_TOKEN}`};
     const exchangeCode = vi.fn<ExchangeCodeFn>().mockResolvedValue({ok: true, value: tokens});

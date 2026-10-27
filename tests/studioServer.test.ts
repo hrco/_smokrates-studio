@@ -135,19 +135,24 @@ describe('health and plan routes', () => {
     expect(JSON.parse(reply.body)).toEqual({isUp: true, schemaVersion: 2, isWorkerBusy: false});
   });
 
-  it('health.get is busy for a running render or asset, and idle while only a send is running', async () => {
-    sandbox.db
-      .prepare("INSERT INTO jobs (id, kind, status, created_at_ms, updated_at_ms) VALUES ('job-1', 'send', 'running', 1, 1)")
-      .run();
+  it('health.get is busy for a running render or asset, and idle for a send, a queue, or a finished job', async () => {
+    const insert = sandbox.db.prepare(
+      'INSERT INTO jobs (id, kind, status, created_at_ms, updated_at_ms) VALUES (?, ?, ?, 1, 1)',
+    );
+    insert.run('job-send', 'send', 'running');
     expect(JSON.parse((await send({path: '/api/health'})).body).isWorkerBusy).toBe(false);
 
-    sandbox.db.prepare("UPDATE jobs SET kind = 'asset', status = 'running' WHERE id = 'job-1'").run();
+    insert.run('job-asset', 'asset', 'running');
     expect(JSON.parse((await send({path: '/api/health'})).body).isWorkerBusy).toBe(true);
 
-    sandbox.db.prepare("UPDATE jobs SET kind = 'render', status = 'running' WHERE id = 'job-1'").run();
+    sandbox.db.prepare("UPDATE jobs SET status = 'succeeded' WHERE id = 'job-asset'").run();
+    insert.run('job-render', 'render', 'queued');
+    expect(JSON.parse((await send({path: '/api/health'})).body).isWorkerBusy).toBe(false);
+
+    sandbox.db.prepare("UPDATE jobs SET status = 'running' WHERE id = 'job-render'").run();
     expect(JSON.parse((await send({path: '/api/health'})).body).isWorkerBusy).toBe(true);
 
-    sandbox.db.prepare("UPDATE jobs SET status = 'succeeded' WHERE id = 'job-1'").run();
+    sandbox.db.prepare("UPDATE jobs SET status = 'succeeded' WHERE id = 'job-render'").run();
     expect(JSON.parse((await send({path: '/api/health'})).body).isWorkerBusy).toBe(false);
   });
 
@@ -324,10 +329,21 @@ describe('request guards', () => {
     expect(reply.status).toBe(415);
   });
 
-  it('refuses a body over 64 KB', async () => {
+  it('accepts application/json with a charset', async () => {
+    const reply = await send({
+      method: 'POST',
+      path: '/api/plans',
+      body: JSON.stringify(importBody()),
+      headers: {'Content-Type': 'application/json; charset=utf-8'},
+    });
+    expect(reply.status).toBe(201);
+  });
+
+  it('refuses a body over 64 KB and closes the connection', async () => {
     const big = JSON.stringify({weekStart: '2026-10-26', episodes: [], padding: 'x'.repeat(70 * 1024)});
     const reply = await send({method: 'POST', path: '/api/plans', body: big, headers: {'Content-Type': 'application/json'}});
     expect(reply.status).toBe(413);
+    expect(reply.headers.connection).toBe('close');
   });
 
   it('sends security headers', async () => {
@@ -421,6 +437,20 @@ describe('media', () => {
     const reply = await send({path: '/media/ep-1.mp4', headers: {Range: 'bytes=50-60'}});
     expect(reply.status).toBe(416);
     expect(reply.headers['content-range']).toBe('bytes */20');
+  });
+
+  it('clamps a range past the end, rejects an empty or reversed range, and ignores a multi-range', async () => {
+    addRender('ep-1');
+    const clamped = await send({path: '/media/ep-1.mp4', headers: {Range: 'bytes=18-100'}});
+    expect([clamped.status, clamped.body, clamped.headers['content-range']]).toEqual([206, 'ij', 'bytes 18-19/20']);
+
+    const reversed = await send({path: '/media/ep-1.mp4', headers: {Range: 'bytes=10-5'}});
+    expect(reversed.status).toBe(416);
+    const emptySuffix = await send({path: '/media/ep-1.mp4', headers: {Range: 'bytes=-0'}});
+    expect(emptySuffix.status).toBe(416);
+
+    const multi = await send({path: '/media/ep-1.mp4', headers: {Range: 'bytes=0-1,2-3'}});
+    expect([multi.status, multi.body]).toEqual([200, VIDEO_BYTES.toString()]);
   });
 
   it('refuses a render path that resolves outside the out folder', async () => {

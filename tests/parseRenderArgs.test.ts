@@ -9,6 +9,24 @@ describe('parseRenderArgs', () => {
     });
   });
 
+  it('accepts a start of zero seconds', () => {
+    expect(parseRenderArgs(['golden-hour', '--label', 'label_on', '--start', '0'])).toEqual({
+      ok: true,
+      args: {
+        slug: 'golden-hour',
+        audioStartSeconds: 0,
+        backgroundPath: undefined,
+        shouldRenderStills: false,
+        labelDecision: 'label_on',
+      },
+    });
+  });
+
+  it('rejects a non-finite start', () => {
+    expect(parseRenderArgs(['golden-hour', '--label', 'label_on', '--start', 'Infinity']).ok).toBe(false);
+    expect(parseRenderArgs(['golden-hour', '--label', 'label_on', '--start', 'NaN']).ok).toBe(false);
+  });
+
   it('parses options', () => {
     const result = parseRenderArgs(['t', '--label', 'label_off', '--start', '12.5', '--background', '/x/a.mp4', '--stills']);
     expect(result).toEqual({
