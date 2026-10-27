@@ -1,4 +1,4 @@
-import {mkdtemp, readFile, rm, stat} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -43,6 +43,13 @@ describe('createFileTokenStore', () => {
     expect(await store.load()).toEqual(tokensExpiringIn(60 * MINUTE_MS));
     expect((await stat(tokenPath)).mode & 0o777).toBe(0o600);
     expect((await stat(path.dirname(tokenPath))).mode & 0o777).toBe(0o700);
+  });
+
+  it('throws on corrupt JSON instead of looking like a missing token file', async () => {
+    await mkdir(path.dirname(tokenPath), {recursive: true});
+    await writeFile(tokenPath, '{');
+
+    await expect(createFileTokenStore(tokenPath).load()).rejects.toThrow(SyntaxError);
   });
 });
 
