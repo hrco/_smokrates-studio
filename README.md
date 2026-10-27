@@ -13,6 +13,9 @@ Makes short vertical videos for the Smokrates music project and sends them to Ti
 | `npm run tiktok:auth` | Sign in to TikTok once. |
 | `npm run tiktok:draft -- out/<file>.mp4` | Upload a rendered video to the TikTok inbox. |
 | `npm run tiktok:status` | Check a TikTok publish status. |
+| `npm run instagram:draft -- out/<file>.mp4` | Upload a rendered video as an Instagram Reel container. Does not post. |
+| `npm run instagram:publish -- out/<file>.mp4` | Post the Reel container. The human runs this. |
+| `npm run instagram:refresh` | Renew the Instagram token (60 days). |
 | `npm run deploy:site` | Publish the static site to the Oracle box. The human runs this. |
 | `npm run typecheck` | Type check. |
 | `npm test` | Run the tests. |

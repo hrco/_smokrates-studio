@@ -14,6 +14,7 @@ The product is for one user on one laptop. It has no accounts and no public web 
 | --- | --- |
 | Remotion render of one track (TrackCard) | Exists |
 | TikTok sign-in (PKCE) and inbox draft upload | Exists. Proven in the sandbox. |
+| Instagram Reels draft, publish and token refresh (CLI scripts). The draft stages the mp4 on the Oracle box for Meta to download. | Exists. Not in the daemon tick. |
 | Public site on the Oracle box, and its deploy script | Exists |
 | Review demo video (ReviewDemo) | Exists |
 | StudioDaemon, SQLite store, jobs, migrations | Planned (cycle 1) |
@@ -85,7 +86,7 @@ The daemon is the only writer. Workers are its children and report back to it. T
 
 - The browser talks only to the daemon. It never reads the database, the disk, or a platform.
 - Only the daemon touches tokens. It is the only process that refreshes them. The API never returns a token. The connections list stats the token files and says connected or not.
-- Tokens live in `.tiktok/` (`tokens.sandbox.json`, `tokens.production.json`) and `.youtube/`. Both folders are git-ignored. Files are mode 600.
+- Tokens live in `.tiktok/` (`tokens.sandbox.json`, `tokens.production.json`) `.youtube/` and `.instagram/` (`token.json`). All three folders are git-ignored. Files are mode 600.
 - The smok-studio folder is read-only. The studio copies what it needs into ignored `public/media/<episodeId>/`.
 - Generated pictures and clips go to ignored `assets/generated/`. Renders go to ignored `out/<episodeId>.mp4`. The database lives in ignored `studio-data/`.
 - The daemon binds to 127.0.0.1. No phone or network access.

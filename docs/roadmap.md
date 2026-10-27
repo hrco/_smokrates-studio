@@ -24,6 +24,13 @@ The plan is in `docs/project-guidelines.md`. It is cut to a Grok kill-gate, one 
 - Direct post needs an audit. Do not plan on it.
 - Open: public-account stall, chunked upload for files over 64 MB.
 
+## Phase 1d: Instagram Reels (built as CLI)
+- `npm run instagram:draft -- out/<file>.mp4` uploads the video and makes a Reel container. It does not post.
+- `npm run instagram:publish -- out/<file>.mp4` posts the container. The human runs it. It refuses a second post.
+- `npm run instagram:refresh` renews the 60-day token.
+- Not in the tick yet. Setup: `docs/meta-setup.md`.
+- The API has no AI-label flag. The human sets the label by hand after publishing.
+
 ## Phase 1c: scheduled sends (folded into cycle 1)
 - A launchd job calls `POST /api/tick` on the daemon every 15 minutes.
 - The daemon sends approved, due episodes to the TikTok inbox, at most one a day.
