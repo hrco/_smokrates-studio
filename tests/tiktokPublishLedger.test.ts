@@ -121,6 +121,17 @@ describe('countInFlightShares', () => {
     expect(countInFlightShares(db, NOW_MS)).toBe(1);
   });
 
+  it('does not count a YouTube row toward the TikTok share cap', () => {
+    const db = openSeededDb(1);
+    db.prepare(
+      `INSERT INTO publishes (id, episode_id, platform, status, created_at_ms)
+       VALUES ('yt', 'ep-1', 'youtube', 'processing', ?)`,
+    ).run(NOW_MS);
+
+    expect(countInFlightShares(db, NOW_MS)).toBe(0);
+    expect(listProcessingTikTokPublishes(db)).toEqual([]);
+  });
+
   it('stops counting a stalled share older than 24 hours', () => {
     const db = openSeededDb(1);
     claimTikTokPublish(db, {episodeId: 'ep-1', nowMs: NOW_MS, newId: sequentialIds()});

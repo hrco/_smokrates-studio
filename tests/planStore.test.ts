@@ -1,5 +1,6 @@
 import type {DatabaseSync} from 'node:sqlite';
 import {beforeEach, describe, expect, it} from 'vitest';
+import {readLatestRenderPath} from '../src/store/episodeRows';
 import {
   approveEpisode,
   approveWeek,
@@ -55,11 +56,11 @@ function addRender(db: DatabaseSync, episodeId: string, createdAtMs = 1): void {
   db.prepare("UPDATE episodes SET status = 'ready' WHERE id = ?").run(episodeId);
 }
 
-function addSentPublish(db: DatabaseSync, episodeId: string, status = 'sent'): void {
+function addSentPublish(db: DatabaseSync, episodeId: string, status = 'sent', platform = 'tiktok'): void {
   db.prepare(
     `INSERT INTO publishes (id, episode_id, platform, status, created_at_ms)
-     VALUES (?, ?, 'tiktok', ?, 1)`,
-  ).run(`pub-${episodeId}`, episodeId, status);
+     VALUES (?, ?, ?, ?, 1)`,
+  ).run(`pub-${episodeId}`, episodeId, platform, status);
 }
 
 function requirePlan(db: DatabaseSync): Plan {
@@ -120,6 +121,29 @@ describe('importPlan', () => {
     expect(importWeek(db, {shouldReplace: true})).toEqual({kind: 'has-publishes'});
     expect(requirePlan(db).episodes).toHaveLength(3);
   });
+
+  it('never replaces a week whose only publish row is on YouTube', () => {
+    importWeek(db);
+    addSentPublish(db, 'ep-1', 'processing', 'youtube');
+
+    expect(importWeek(db, {shouldReplace: true})).toEqual({kind: 'has-publishes'});
+    expect(requirePlan(db).episodes).toHaveLength(3);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM publishes').get()).toEqual({count: 1});
+  });
+
+  it('drops the week jobs when it replaces, so old work cannot point at a deleted night', () => {
+    importWeek(db);
+    db.prepare(
+      `INSERT INTO jobs (id, kind, episode_id, status, created_at_ms, updated_at_ms)
+       VALUES ('job-1', 'render', 'ep-1', 'succeeded', 1, 1)`,
+    ).run();
+
+    const result = importWeek(db, {shouldReplace: true, nightCount: 1});
+
+    expect(result.kind).toBe('imported');
+    expect(db.prepare('SELECT COUNT(*) AS count FROM jobs').get()).toEqual({count: 0});
+    expect(db.prepare('SELECT id FROM episodes').all()).toEqual([{id: 'ep-1'}]);
+  });
 });
 
 describe('getPlan', () => {
@@ -145,6 +169,18 @@ describe('getPlan', () => {
       renderPath: 'out/ep-1-2.mp4',
     });
     expect(second?.renderPath).toBeNull();
+  });
+
+  it('picks the later render when two share a timestamp', () => {
+    importWeek(db);
+    addRender(db, 'ep-1', 5);
+    db.prepare(
+      `INSERT INTO renders (id, episode_id, file_path, duration_seconds, frame_count, created_at_ms)
+       VALUES ('render-later', 'ep-1', 'out/ep-1-later.mp4', 15, 450, 5)`,
+    ).run();
+
+    expect(requirePlan(db).episodes[0]?.renderPath).toBe('out/ep-1-later.mp4');
+    expect(readLatestRenderPath(db, 'ep-1')).toBe('out/ep-1-later.mp4');
   });
 
   it('keeps the summer offset for a time before the clocks change back', () => {
@@ -226,6 +262,56 @@ describe('updateEpisode', () => {
     const result = updateEpisode(db, {episodeId: 'ep-1', update: {startSecond: 30}, nowMs: NOW_MS});
     expect(result.kind === 'updated' && result.episode.renderPath).toBeNull();
     expect(result.kind === 'updated' && result.episode.status).toBe('planned');
+  });
+
+  it('un-approves a night when the picture inputs change, and keeps the render when they do not', () => {
+    addRender(db, 'ep-1');
+    db.prepare("UPDATE episodes SET status = 'approved' WHERE id = 'ep-1'").run();
+
+    updateEpisode(db, {
+      episodeId: 'ep-1',
+      update: {labelDecision: 'label_on', startSecond: 12},
+      nowMs: NOW_MS,
+    });
+    expect(requirePlan(db).episodes[0]).toMatchObject({
+      status: 'approved',
+      renderPath: 'out/ep-1-1.mp4',
+      labelDecision: 'label_on',
+      startSecond: 12,
+    });
+
+    for (const update of [{trackSlug: 'other-slug'}, {durationSeconds: 20}, {format: 'loop' as const}]) {
+      const result = updateEpisode(db, {episodeId: 'ep-1', update, nowMs: NOW_MS});
+      expect(result.kind === 'updated' && result.episode.renderPath).toBeNull();
+      expect(result.kind === 'updated' && result.episode.status).toBe('planned');
+      addRender(db, 'ep-1');
+      db.prepare("UPDATE episodes SET status = 'approved' WHERE id = 'ep-1'").run();
+    }
+  });
+
+  it('sends a rendering night back to planned when its picture changes', () => {
+    addRender(db, 'ep-1');
+    db.prepare("UPDATE episodes SET status = 'rendering' WHERE id = 'ep-1'").run();
+
+    const result = updateEpisode(db, {episodeId: 'ep-1', update: {durationSeconds: 20}, nowMs: NOW_MS});
+
+    expect(result.kind === 'updated' && result.episode).toMatchObject({status: 'planned', renderPath: null});
+    expect(db.prepare('SELECT COUNT(*) AS count FROM renders').get()).toEqual({count: 0});
+  });
+
+  it.each(['not_new', 'skipped'] as const)('clears the render of a %s night and leaves that status', (status) => {
+    addRender(db, 'ep-1');
+    db.prepare('UPDATE episodes SET status = ? WHERE id = ?').run(status, 'ep-1');
+
+    const result = updateEpisode(db, {episodeId: 'ep-1', update: {trackSlug: 'other-slug'}, nowMs: NOW_MS});
+
+    expect(result.kind === 'updated' && result.episode.status).toBe(status);
+    expect(result.kind === 'updated' && result.episode.renderPath).toBeNull();
+    if (status === 'not_new') {
+      expect(approveEpisode(db, {episodeId: 'ep-1'})).toEqual({kind: 'not-new', night: 1});
+    } else {
+      expect(approveEpisode(db, {episodeId: 'ep-1'})).toEqual({kind: 'is-skipped'});
+    }
   });
 });
 
@@ -319,6 +405,17 @@ describe('approveWeek', () => {
     db.prepare("UPDATE episodes SET status = 'not_new' WHERE id = 'ep-3'").run();
 
     expect(approveWeek(db, {weekStart: WEEK_START})).toEqual({kind: 'not-new', night: 3});
+    expect(requirePlan(db).status).toBe('draft');
+    expect(requirePlan(db).episodes.map((episode) => episode.status)).toEqual(['ready', 'skipped', 'not_new']);
+  });
+
+  it('stops at an earlier night that is not new before a later unrendered one', () => {
+    db.prepare("UPDATE episodes SET status = 'not_new' WHERE id = 'ep-1'").run();
+    addRender(db, 'ep-3');
+
+    expect(approveWeek(db, {weekStart: WEEK_START})).toEqual({kind: 'not-new', night: 1});
+    expect(requirePlan(db).status).toBe('draft');
+    expect(requirePlan(db).episodes.map((episode) => episode.status)).toEqual(['not_new', 'planned', 'ready']);
   });
 
   it('says there is no plan for an unknown week', () => {

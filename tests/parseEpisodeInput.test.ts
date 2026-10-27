@@ -108,6 +108,18 @@ describe('parsePlanImport', () => {
     expectFailure(parsePlanImport(buildImport([scene])), {field: 'episodes[0].groksPrompt'});
   });
 
+  it('trims a caption and refuses one that is blank or past 2200 characters', () => {
+    const trimmed = parsePlanImport(buildImport([buildEpisode({caption: '  Golden Hour Groove  '})]));
+    expect(trimmed.ok && trimmed.value.episodes[0]?.caption).toBe('Golden Hour Groove');
+
+    expectFailure(parsePlanImport(buildImport([buildEpisode({caption: '   '})])), {field: 'episodes[0].caption'});
+    expectFailure(parsePlanImport(buildImport([buildEpisode({caption: 'a'.repeat(2201)})])), {
+      field: 'episodes[0].caption',
+      message: 'episodes[0].caption is longer than 2200 characters.',
+    });
+    expect(parsePlanImport(buildImport([buildEpisode({caption: 'a'.repeat(2200)})])).ok).toBe(true);
+  });
+
   it('refuses a Grok prompt on a format that is not scene', () => {
     expectFailure(parsePlanImport(buildImport([buildEpisode({groksPrompt: 'A road'})])), {
       field: 'episodes[0].groksPrompt',
