@@ -102,6 +102,27 @@ describe('loadTrack', () => {
     expect(!result.ok && result.error.detail).toContain('theme');
   });
 
+  it('falls back to a single wav when track.mp3 is absent', async () => {
+    const trackDir = await createTrackDir('t01', {
+      'song.json': validSong,
+      'cover.png': '',
+      'session.WAV': '',
+    });
+    const result = await loadTrack(trackDir);
+    expect(result.ok && result.track.audioPath).toBe(path.join(trackDir, 'session.WAV'));
+  });
+
+  it('rejects a whitespace-only required field', async () => {
+    const trackDir = await createTrackDir('t01', {
+      'song.json': {...validSong, theme: '   '},
+      'cover.png': '',
+      'track.mp3': '',
+    });
+    const result = await loadTrack(trackDir);
+    expect(!result.ok && result.error.code).toBe('invalid-song-json');
+    expect(!result.ok && result.error.detail).toContain('theme');
+  });
+
   it('reports missing audio', async () => {
     const trackDir = await createTrackDir('t01', {'song.json': validSong, 'cover.png': '', 'clip.mp4': ''});
     const result = await loadTrack(trackDir);
@@ -137,5 +158,11 @@ describe('findTrackDirBySlug', () => {
   it('returns undefined when no slug matches', async () => {
     await createTrackDir('t01', {'song.json': validSong});
     expect(await findTrackDirBySlug(rootDir, 'nope')).toBeUndefined();
+  });
+
+  it('skips directories that have no song.json', async () => {
+    await createTrackDir('notes', {'readme.txt': 'not a track'});
+    const wantedDir = await createTrackDir('t01', {'song.json': validSong});
+    expect(await findTrackDirBySlug(rootDir, 'golden-hour-groove')).toBe(wantedDir);
   });
 });

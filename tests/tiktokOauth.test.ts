@@ -91,6 +91,28 @@ describe('exchangeCode', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('invalid-response');
   });
+
+  it('rejects a blank access token', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({...tokenBody, access_token: ''}));
+
+    const result = await exchangeCode(input, fetchFn);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('invalid-response');
+  });
+
+  it('reports a non-JSON token response as invalid', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(new Response('<html>', {status: 502}));
+
+    const result = await exchangeCode(input, fetchFn);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.operation).toBe('exchange-code');
+      expect(result.error.code).toBe('invalid-response');
+      expect(result.error.detail).toContain('HTTP 502');
+    }
+  });
 });
 
 describe('refreshAccessToken', () => {
@@ -106,5 +128,18 @@ describe('refreshAccessToken', () => {
     expect(form.get('client_key')).toBe('key');
     expect(form.get('client_secret')).toBe('secret');
     expect(form.get('refresh_token')).toBe('old');
+  });
+
+  it('maps a TikTok error body on refresh', async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse({error: 'invalid_grant', error_description: 'Refresh expired'}, 401));
+
+    const result = await refreshAccessToken({clientKey: 'key', clientSecret: 'secret', refreshToken: 'old'}, fetchFn);
+
+    expect(result).toEqual({
+      ok: false,
+      error: {operation: 'refresh-token', code: 'invalid_grant', detail: 'Refresh expired'},
+    });
   });
 });

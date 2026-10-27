@@ -6,11 +6,12 @@ process.on('unhandledRejection', (reason) => {
 import {existsSync} from 'node:fs';
 import {readFile, stat} from 'node:fs/promises';
 import path from 'node:path';
+import {readSidecarCaption} from '../src/publish/readSidecarCaption';
 import {readTikTokCredentials} from '../src/tiktok/credentials';
 import {refreshAccessToken} from '../src/tiktok/oauth';
 import {fetchPublishStatus, uploadVideoToInbox, waitForInboxDelivery} from '../src/tiktok/inboxUpload';
 import {createFileTokenStore, DEFAULT_TOKEN_PATH, getValidAccessToken} from '../src/tiktok/tokenStore';
-import {isRecord, type TikTokError} from '../src/tiktok/types';
+import type {TikTokError} from '../src/tiktok/types';
 
 const USAGE = 'usage: tiktok-upload-draft <path-to-mp4>';
 const CAPTION_HINT =
@@ -42,16 +43,6 @@ function readClientCredentials(): {clientKey: string; clientSecret: string; toke
   return {clientKey, clientSecret, environment, tokenPath: path.join(path.dirname(DEFAULT_TOKEN_PATH), tokenFileName)};
 }
 
-async function readCaption(videoPath: string): Promise<string | undefined> {
-  const sidecarPath = videoPath.replace(/\.mp4$/i, '.json');
-  const sidecar: unknown = await readFile(sidecarPath, 'utf8').then(
-    (text) => JSON.parse(text),
-    () => undefined,
-  );
-  if (!isRecord(sidecar) || typeof sidecar.caption !== 'string') return undefined;
-  return sidecar.caption;
-}
-
 async function main(): Promise<void> {
   const videoPath = await readVideoPathArg();
   const {clientKey, clientSecret, tokenPath, environment} = readClientCredentials();
@@ -79,7 +70,7 @@ async function main(): Promise<void> {
   }
   console.log(`status: ${delivered.value.status}`);
 
-  const caption = await readCaption(videoPath);
+  const caption = await readSidecarCaption(videoPath);
   if (caption === undefined) return console.log('No caption found in the sidecar JSON next to the video.');
   console.log(`\n${CAPTION_HINT}\n\n${caption}`);
 }

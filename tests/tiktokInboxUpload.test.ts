@@ -109,6 +109,71 @@ describe('uploadVideoToInbox', () => {
     }
   });
 
+  it('rejects an empty file before calling TikTok', async () => {
+    const fetchFn = vi.fn<typeof fetch>();
+
+    const result = await uploadVideoToInbox({accessToken: 'tok', videoBytes: new Uint8Array()}, fetchFn);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('empty-video');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('accepts a video of exactly 64 MB', async () => {
+    const exact = new Uint8Array(64 * 1024 * 1024);
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(okInit))
+      .mockResolvedValueOnce(new Response(null, {status: 201}));
+
+    const result = await uploadVideoToInbox({accessToken: 'tok', videoBytes: exact}, fetchFn);
+
+    expect(result.ok).toBe(true);
+    const [, initInit] = fetchFn.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(initInit.body as string).source_info.video_size).toBe(exact.byteLength);
+  });
+
+  it('does not upload when init omits the upload url', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({data: {publish_id: 'pub-only'}, error: {code: 'ok', message: '', log_id: 'log-1'}}),
+    );
+
+    const result = await uploadVideoToInbox({accessToken: 'tok', videoBytes}, fetchFn);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('invalid-response');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when init returns a non-JSON body', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(new Response('upstream', {status: 502}));
+
+    const result = await uploadVideoToInbox({accessToken: 'tok', videoBytes}, fetchFn);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('invalid-response');
+      expect(result.error.detail).toContain('HTTP 502');
+    }
+  });
+
+  it('rejects other upload statuses and keeps the upload url out of the error', async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(okInit))
+      .mockResolvedValueOnce(new Response(null, {status: 403}));
+
+    const result = await uploadVideoToInbox({accessToken: 'tok', videoBytes}, fetchFn);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('upload-rejected');
+      expect(result.error.detail).toContain('HTTP 403');
+      expect(result.error.detail).toContain('v_inbox_file~v2.123');
+      expect(JSON.stringify(result)).not.toContain('secret-path');
+    }
+  });
+
   it('treats HTTP 206 as an error and does not leak the upload url', async () => {
     const fetchFn = vi
       .fn<typeof fetch>()
@@ -215,6 +280,17 @@ describe('waitForInboxDelivery', () => {
     expect(sleepFn).not.toHaveBeenCalled();
   });
 
+  it('stops on PUBLISH_COMPLETE without another poll', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(statusBody('PUBLISH_COMPLETE')));
+    const sleepFn = vi.fn();
+
+    const result = await waitForInboxDelivery(input, fetchFn, {sleepFn});
+
+    expect(result).toEqual({ok: true, value: {status: 'PUBLISH_COMPLETE'}});
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(sleepFn).not.toHaveBeenCalled();
+  });
+
   it('polls once and times out when the budget is shorter than one interval', async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(statusBody('PROCESSING_UPLOAD')));
     const sleepFn = vi.fn();
@@ -236,6 +312,27 @@ describe('waitForInboxDelivery', () => {
       ok: false,
       error: {operation: 'wait-for-inbox-delivery', code: 'publish-failed', detail: 'file_format_check_failed'},
     });
+  });
+
+  it('uses a fallback detail when FAILED has no fail_reason', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(statusBody('FAILED')));
+
+    const result = await waitForInboxDelivery(input, fetchFn, {sleepFn: async () => undefined});
+
+    expect(result).toEqual({
+      ok: false,
+      error: {operation: 'wait-for-inbox-delivery', code: 'publish-failed', detail: 'no fail_reason given'},
+    });
+  });
+
+  it('rejects an unknown publish status instead of treating it as delivered', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(statusBody('PROCESSING_SOMETHING_NEW')));
+
+    const result = await waitForInboxDelivery(input, fetchFn, {sleepFn: async () => undefined});
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('invalid-response');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
   it('times out after the poll budget is spent', async () => {

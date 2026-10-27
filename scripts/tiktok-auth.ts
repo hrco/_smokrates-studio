@@ -3,6 +3,7 @@ import {existsSync} from 'node:fs';
 import {randomBytes} from 'node:crypto';
 import {createServer, type Server} from 'node:http';
 import path from 'node:path';
+import {browserOpenArgs} from '../src/tiktok/authBrowser';
 import {type AuthRequestSession, receiveAuthRequest, reportUnhandledAuthRejection} from '../src/tiktok/authRequest';
 import {readTikTokCredentials} from '../src/tiktok/credentials';
 import {buildAuthorizeUrl, exchangeCode} from '../src/tiktok/oauth';
@@ -114,8 +115,7 @@ function openAuthorizePage(session: CallbackSession): void {
   });
   console.log(`Open this URL in your browser:\n${authorizeUrl}`);
   // The default browser may not hold the creator's TikTok session; TIKTOK_AUTH_BROWSER picks the app (e.g. Safari).
-  const browserApp = process.env.TIKTOK_AUTH_BROWSER;
-  const openArgs = browserApp ? ['-a', browserApp, authorizeUrl] : [authorizeUrl];
+  const openArgs = browserOpenArgs(process.env.TIKTOK_AUTH_BROWSER, authorizeUrl);
   execFile('open', openArgs, (error) => {
     if (error) console.error('tiktok-auth: could not open the browser; use the URL above.');
   });
