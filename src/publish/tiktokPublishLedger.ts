@@ -1,4 +1,5 @@
 import type {DatabaseSync} from 'node:sqlite';
+import {runInTransaction} from '../store/withTransaction';
 
 export const STALLED_AFTER_MS = 30 * 60_000;
 export const MAX_IN_FLIGHT_SHARES = 5;
@@ -133,6 +134,44 @@ function toProcessingPublish(row: Record<string, unknown>): ProcessingTikTokPubl
     throw new Error(`list-processing-tiktok-publishes: bad external_id on row ${id}`);
   }
   return {publishRowId: id, episodeId, publishId: externalId, createdAtMs};
+}
+
+function readPublishExternalId(db: DatabaseSync, publishRowId: string): string | null {
+  const row = db.prepare('SELECT external_id FROM publishes WHERE id = ?').get(publishRowId);
+  if (row === undefined) throw new Error(`settle-failed-tiktok-upload: no publish row ${publishRowId}`);
+  const externalId = row.external_id;
+  if (externalId === null) return null;
+  if (typeof externalId !== 'string') {
+    throw new Error(`settle-failed-tiktok-upload: bad external_id on row ${publishRowId}`);
+  }
+  return externalId;
+}
+
+function releaseUninitializedPublish(db: DatabaseSync, publishRowId: string): void {
+  const result = db.prepare('DELETE FROM publishes WHERE id = ? AND external_id IS NULL').run(publishRowId);
+  if (result.changes !== 1) {
+    throw new Error(`settle-failed-tiktok-upload: could not release publish row ${publishRowId}`);
+  }
+}
+
+/**
+ * Records an upload failure in one transaction.
+ * A claim that never received a publish id is deleted, so it holds no day and no night.
+ * A share TikTok already initialised stays, marked failed, because that slot is real.
+ */
+export function settleFailedTikTokUpload(
+  db: DatabaseSync,
+  options: {publishRowId: string; nowMs: number; releaseClaim: boolean},
+): void {
+  const {publishRowId, nowMs, releaseClaim} = options;
+  runInTransaction(db, 'settle-failed-tiktok-upload', () => {
+    const externalId = readPublishExternalId(db, publishRowId);
+    if (releaseClaim && externalId === null) {
+      releaseUninitializedPublish(db, publishRowId);
+      return;
+    }
+    markTikTokPublish(db, {publishRowId, status: 'failed', nowMs});
+  });
 }
 
 /** Lists TikTok publish rows still in processing, oldest first. */

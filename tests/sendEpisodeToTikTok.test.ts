@@ -56,7 +56,7 @@ describe('sendEpisodeToTikTok', () => {
     expect(readPublish(db, 'ep-1')).toMatchObject({status: 'processing', external_id: 'pub-1'});
   });
 
-  it('marks the row failed with a null publish id when init fails', async () => {
+  it('deletes the publish row when init fails before a publish id', async () => {
     const db = openSeededDb(1);
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({error: {code: 'access_token_invalid', message: 'bad', log_id: 'l'}}, 401),
@@ -65,7 +65,17 @@ describe('sendEpisodeToTikTok', () => {
     const result = await sendEpisodeToTikTok(sendOptions(db, fetchFn));
 
     expect(result).toMatchObject({kind: 'upload-failed', publishId: null, error: {code: 'access_token_invalid'}});
-    expect(readPublish(db, 'ep-1')).toMatchObject({status: 'failed', external_id: null});
+    expect(db.prepare("SELECT id FROM publishes WHERE episode_id = 'ep-1'").get()).toBeUndefined();
+  });
+
+  it('deletes the publish row when init throws a network error', async () => {
+    const db = openSeededDb(1);
+    const fetchFn = vi.fn<typeof fetch>().mockRejectedValue(new Error('network down'));
+
+    const result = await sendEpisodeToTikTok(sendOptions(db, fetchFn));
+
+    expect(result).toMatchObject({kind: 'upload-failed', publishId: null, error: {code: 'network-error'}});
+    expect(db.prepare("SELECT id FROM publishes WHERE episode_id = 'ep-1'").get()).toBeUndefined();
   });
 
   it('marks the row failed and keeps the publish id when the PUT fails', async () => {
@@ -79,18 +89,28 @@ describe('sendEpisodeToTikTok', () => {
 
     expect(result).toMatchObject({kind: 'upload-failed', publishId: 'pub-1', error: {code: 'upload-rejected'}});
     expect(readPublish(db, 'ep-1')).toMatchObject({status: 'failed', external_id: 'pub-1'});
+
+    const secondFetch = vi.fn<typeof fetch>();
+    const second = await sendEpisodeToTikTok(sendOptions(db, secondFetch));
+
+    expect(second).toEqual({kind: 'already-claimed', status: 'failed'});
+    expect(secondFetch).not.toHaveBeenCalled();
   });
 
-  it('never inits twice for the same episode, even after a failure', async () => {
+  it('tries init again after a failure that never received a publish id', async () => {
     const db = openSeededDb(1);
-    const failingFetch = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({error: {code: 'internal_error', message: '', log_id: ''}}, 500));
+    const failingFetch = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({error: {code: 'internal_error', message: '', log_id: ''}}, 500),
+    );
     await sendEpisodeToTikTok(sendOptions(db, failingFetch));
-    const secondFetch = vi.fn<typeof fetch>();
+    const secondFetch = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({error: {code: 'internal_error', message: '', log_id: ''}}, 500),
+    );
 
     const result = await sendEpisodeToTikTok(sendOptions(db, secondFetch));
 
-    expect(result).toEqual({kind: 'already-claimed', status: 'failed'});
-    expect(secondFetch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({kind: 'upload-failed', publishId: null});
+    expect(secondFetch).toHaveBeenCalled();
   });
 
   it('refuses a new share without any request when 5 are in flight', async () => {
