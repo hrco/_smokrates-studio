@@ -10,6 +10,8 @@
 	<array>
 		<string>/usr/bin/curl</string>
 		<string>-fsS</string>
+		<string>--max-time</string>
+		<string>600</string>
 		<string>-X</string>
 		<string>POST</string>
 		<string>-H</string>

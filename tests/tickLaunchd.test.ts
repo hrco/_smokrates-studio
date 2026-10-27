@@ -14,6 +14,8 @@ describe('launchd tick template', () => {
     expect(plist).toContain('<string>airbook</string>');
     expect(plist).toContain('<string>/usr/bin/curl</string>');
     expect(plist).toContain('<string>-fsS</string>');
+    expect(plist).toContain('<string>--max-time</string>');
+    expect(plist).toContain('<string>600</string>');
     expect(plist).toContain('<string>POST</string>');
     expect(plist).toContain('<string>Origin: http://127.0.0.1:8724</string>');
     expect(plist).toContain('<string>http://127.0.0.1:8724/api/tick</string>');
