@@ -109,6 +109,54 @@ describe('uploadVideoToInbox', () => {
   });
 });
 
+describe('uploadVideoToInbox onInitialized', () => {
+  const videoBytes = new Uint8Array([1, 2, 3]);
+
+  it('hands over the publish id before the PUT request', async () => {
+    const events: string[] = [];
+    const fetchFn = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+      events.push(init?.method ?? 'none');
+      return init?.method === 'PUT' ? new Response(null, {status: 201}) : jsonResponse(okInit);
+    });
+    const onInitialized = vi.fn().mockImplementation(async (publishId: string) => {
+      events.push(`callback:${publishId}`);
+    });
+
+    const result = await uploadVideoToInbox({accessToken: 'tok', videoBytes, onInitialized}, fetchFn);
+
+    expect(result.ok).toBe(true);
+    expect(events).toEqual(['POST', 'callback:v_inbox_file~v2.123', 'PUT']);
+  });
+
+  it('stops before the PUT when the callback fails', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(okInit));
+    const onInitialized = vi.fn().mockRejectedValue(new Error('disk full'));
+
+    const result = await uploadVideoToInbox({accessToken: 'tok', videoBytes, onInitialized}, fetchFn);
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        operation: 'upload-video-to-inbox',
+        code: 'record-publish-id-failed',
+        detail: 'disk full (publish_id v_inbox_file~v2.123)',
+      },
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the current behaviour when no callback is given', async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(okInit))
+      .mockResolvedValueOnce(new Response(null, {status: 201}));
+
+    const result = await uploadVideoToInbox({accessToken: 'tok', videoBytes}, fetchFn);
+
+    expect(result).toEqual({ok: true, value: {publishId: 'v_inbox_file~v2.123'}});
+  });
+});
+
 describe('waitForInboxDelivery', () => {
   const input = {accessToken: 'tok', publishId: 'pub-1'};
 

@@ -101,10 +101,15 @@ async function putVideoBytes(uploadUrl: string, videoBytes: Uint8Array<ArrayBuff
 
 /**
  * Sends one mp4 to the creator's TikTok inbox as a draft. Single chunk only (<= 64 MB);
- * chunked upload is out of scope. Returns the publish_id. The upload URL is never returned or logged.
+ * chunked upload is out of scope. Returns the publish_id. `onInitialized` runs after init and before the
+ * bytes are sent, so the caller can store the publish_id first; if it throws, nothing is uploaded. The upload URL is never returned or logged.
  */
 export async function uploadVideoToInbox(
-  input: {accessToken: string; videoBytes: Uint8Array<ArrayBuffer>},
+  input: {
+    accessToken: string;
+    videoBytes: Uint8Array<ArrayBuffer>;
+    onInitialized?: (publishId: string) => Promise<void>;
+  },
   fetchFn: FetchFn,
 ): Promise<TikTokResult<{publishId: string}>> {
   const size = input.videoBytes.byteLength;
@@ -119,6 +124,14 @@ export async function uploadVideoToInbox(
 
   const init = await initInboxUpload(input.accessToken, size, fetchFn);
   if (!init.ok) return init;
+  if (input.onInitialized) {
+    try {
+      await input.onInitialized(init.value.publishId);
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : String(error);
+      return failure('upload-video-to-inbox', 'record-publish-id-failed', `${cause} (publish_id ${init.value.publishId})`);
+    }
+  }
   const put = await putVideoBytes(init.value.uploadUrl, input.videoBytes, fetchFn);
   if (!put.ok) {
     const {operation, code, detail} = put.error;

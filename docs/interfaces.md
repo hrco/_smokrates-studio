@@ -50,7 +50,7 @@ Publish state is per platform, in publishes. A publish status is one of: process
 - A publish is unique per episode and platform.
 - The daemon writes the row at TikTok init, with status processing, before the upload.
 - A share in processing for over 30 minutes becomes stalled. It is never retried.
-- The tick stops at 5 shares in flight, because TikTok allows 5 pending shares a day.
+- The tick stops at 5 shares in flight, because TikTok allows 5 pending shares a day. In flight means processing, stalled, or failed after init, within 24 hours. TikTok keeps the slot of every share it initialised.
 
 A render is keyed by episode id. The output is `out/<episodeId>.mp4`. The staging folder is `public/media/<episodeId>/`. An episode has its own duration in seconds. Two episodes with the same track never share a path.
 

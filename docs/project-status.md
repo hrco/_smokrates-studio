@@ -17,7 +17,7 @@ Ordered, cycle 1. Each item is one slice and one pull request.
 1. Done by this pull request: the plan docs follow the architecture review. ADR 0001 is Accepted. The contracts, the guidelines and the config match the cut.
 2. Done 14 October 2026: the day-1 Grok CLI test passed. Scene stays in cycle 1. Clips are 720p and carry sound, so Scene upscales and mutes them. See `docs/research/grok-day1-test.md`.
 3. Done 14 October 2026: the SQLite schema, a unique (episodeId, platform) publish row, jobs, and `schema_migrations` exist. The one-heavy-job mutex is a partial unique index on jobs. A shared token provider has a concurrent-refresh test.
-4. Persist the TikTok publish_id at init. Add the 30-minute stalled timeout and the 5-share cap.
+4. Done 25 October 2026: the publish row is claimed before TikTok init, and the publish_id is saved the moment init returns. One episode never gets a second init. A share in processing for over 30 minutes becomes stalled and is never retried. No new share starts at 5 in flight.
 5. Review page on 127.0.0.1:8724 with vendored DNP XIII tokens. Approve, Skip and Time. Replace the sidecar flag aiGenerated:true with a per-episode label decision. No Showrunner.
 6. launchd tick to the daemon. The human still taps Post in TikTok.
 7. Only then: Scene, then the Showrunner, then YouTube.
