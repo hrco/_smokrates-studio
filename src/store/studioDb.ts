@@ -51,9 +51,22 @@ function assertDatabaseIsNotNewer(appliedVersions: readonly number[], migrations
   }
 }
 
-function applyMigration(db: DatabaseSync, migration: Migration, nowMs: number): void {
+/**
+ * Applies one migration inside a BEGIN IMMEDIATE transaction.
+ * Re-reads schema_migrations inside the transaction so that a concurrent process that committed
+ * between the caller's pre-read and this call does not cause a double-apply.
+ * Returns true when the migration was applied, false when it was already present (skipped).
+ */
+function applyMigration(db: DatabaseSync, migration: Migration, nowMs: number): boolean {
   db.exec('BEGIN IMMEDIATE');
   try {
+    const alreadyApplied = db
+      .prepare('SELECT 1 FROM schema_migrations WHERE version = ?')
+      .get(migration.version);
+    if (alreadyApplied) {
+      db.exec('ROLLBACK');
+      return false;
+    }
     db.exec(migration.sql);
     db.prepare('INSERT INTO schema_migrations (version, name, applied_at_ms) VALUES (?, ?, ?)').run(
       migration.version,
@@ -61,6 +74,7 @@ function applyMigration(db: DatabaseSync, migration: Migration, nowMs: number): 
       nowMs,
     );
     db.exec('COMMIT');
+    return true;
   } catch (error) {
     db.exec('ROLLBACK');
     throw new Error(`migration ${migration.version} (${migration.name}) failed: ${describeError(error)}`, {
@@ -71,21 +85,36 @@ function applyMigration(db: DatabaseSync, migration: Migration, nowMs: number): 
 
 /**
  * Applies every migration the database has not recorded, in order, each in its own transaction.
- * Returns the versions applied; an up-to-date database returns an empty list.
+ * Returns the versions applied by THIS call; an up-to-date database returns an empty list.
  * Throws when the list is not strictly increasing, when the database holds a version the list lacks,
  * or when a migration fails (that migration is rolled back).
+ *
+ * Each migration is guarded by a re-read of schema_migrations inside its BEGIN IMMEDIATE, so a
+ * version committed by a concurrent process between the pre-read and the transaction is silently
+ * skipped and not counted in the return value.
+ *
+ * The optional `preReadApplied` parameter lets callers inject a known-applied list (e.g. a stale
+ * snapshot read before another process committed), which drives the pending filter without
+ * bypassing the per-transaction re-read guard.
  */
-export function applyPendingMigrations(db: DatabaseSync, migrations: readonly Migration[]): number[] {
+export function applyPendingMigrations(
+  db: DatabaseSync,
+  migrations: readonly Migration[],
+  preReadApplied?: readonly number[],
+): number[] {
   assertMigrationsIncrease(migrations);
   db.exec(
     'CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at_ms INTEGER NOT NULL)',
   );
-  const appliedVersions = readAppliedVersions(db);
+  const appliedVersions = preReadApplied ?? readAppliedVersions(db);
   assertDatabaseIsNotNewer(appliedVersions, migrations);
 
   const pendingMigrations = migrations.filter((migration) => !appliedVersions.includes(migration.version));
-  for (const migration of pendingMigrations) applyMigration(db, migration, Date.now());
-  return pendingMigrations.map((migration) => migration.version);
+  const applied: number[] = [];
+  for (const migration of pendingMigrations) {
+    if (applyMigration(db, migration, Date.now())) applied.push(migration.version);
+  }
+  return applied;
 }
 
 /**
