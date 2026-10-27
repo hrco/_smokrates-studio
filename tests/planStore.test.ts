@@ -183,14 +183,15 @@ describe('updateEpisode', () => {
     expect(result.kind === 'updated' && result.episode.publishAt).toBe('2026-10-27T19:00:00+01:00');
   });
 
-  it('refuses a time in the past and changes nothing', () => {
-    const result = updateEpisode(db, {
-      episodeId: 'ep-1',
-      update: {caption: 'Changed', publishAtMs: NOW_MS - 1},
-      nowMs: NOW_MS,
-    });
-
-    expect(result).toEqual({kind: 'time-in-past'});
+  it('refuses a time that is now or in the past and changes nothing', () => {
+    for (const publishAtMs of [NOW_MS, NOW_MS - 1]) {
+      const result = updateEpisode(db, {
+        episodeId: 'ep-1',
+        update: {caption: 'Changed', publishAtMs},
+        nowMs: NOW_MS,
+      });
+      expect(result).toEqual({kind: 'time-in-past'});
+    }
     expect(requirePlan(db).episodes[0]?.caption).toBe('Golden Hour Groove');
   });
 
@@ -273,9 +274,10 @@ describe('skipEpisode', () => {
     expect(requirePlan(db).episodes[1]?.status).toBe('planned');
   });
 
-  it('refuses a night whose publish row is processing', () => {
-    addSentPublish(db, 'ep-2', 'processing');
+  it.each(['processing', 'stalled', 'failed'])('refuses a night whose publish row is %s', (status) => {
+    addSentPublish(db, 'ep-2', status);
     expect(skipEpisode(db, {episodeId: 'ep-2'})).toEqual({kind: 'already-sent'});
+    expect(requirePlan(db).episodes[1]?.status).toBe('planned');
   });
 
   it('names an unknown episode', () => {

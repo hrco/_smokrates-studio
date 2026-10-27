@@ -62,6 +62,7 @@ describe('parsePlanImport', () => {
     ['labelDecision', {labelDecision: 'maybe'}, 'episodes[0].labelDecision'],
     ['night 8', {night: 8}, 'episodes[0].night'],
     ['night 0', {night: 0}, 'episodes[0].night'],
+    ['duration 0', {durationSeconds: 0}, 'episodes[0].durationSeconds'],
     ['duration 61', {durationSeconds: 61}, 'episodes[0].durationSeconds'],
     ['negative start', {startSecond: -1}, 'episodes[0].startSecond'],
     ['publishAt without offset', {publishAt: '2026-10-27T18:00:00'}, 'episodes[0].publishAt'],
@@ -79,6 +80,11 @@ describe('parsePlanImport', () => {
 
   it('refuses a night that appears twice', () => {
     expectFailure(parsePlanImport(buildImport([buildEpisode(), buildEpisode()])), {field: 'episodes[1].night'});
+  });
+
+  it('accepts a duration on either bound', () => {
+    expect(parsePlanImport(buildImport([buildEpisode({durationSeconds: 1})])).ok).toBe(true);
+    expect(parsePlanImport(buildImport([buildEpisode({durationSeconds: 60})])).ok).toBe(true);
   });
 
   it('refuses a weekStart that is not a Monday', () => {

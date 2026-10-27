@@ -70,6 +70,22 @@ describe('claimTikTokPublish', () => {
     });
   });
 
+  it('lets a new share start once the five in-flight rows leave the 24 hour window', () => {
+    const db = openSeededDb(6);
+    const newId = sequentialIds();
+    for (let night = 1; night <= 5; night += 1) {
+      expect(claimTikTokPublish(db, {episodeId: `ep-${night}`, nowMs: NOW_MS, newId}).kind).toBe('claimed');
+    }
+
+    expect(
+      claimTikTokPublish(db, {episodeId: 'ep-6', nowMs: NOW_MS + SHARE_WINDOW_MS - 1, newId}),
+    ).toEqual({kind: 'share-cap-reached', inFlightShares: 5});
+    expect(claimTikTokPublish(db, {episodeId: 'ep-6', nowMs: NOW_MS + SHARE_WINDOW_MS, newId})).toEqual({
+      kind: 'claimed',
+      publishRowId: 'row-6',
+    });
+  });
+
   it('rolls back and rethrows with context when the insert fails', () => {
     const db = openSeededDb(1);
 

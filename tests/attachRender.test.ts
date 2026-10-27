@@ -68,9 +68,11 @@ describe('attachRender', () => {
     });
   });
 
-  it('refuses a night that has a publish row and writes nothing', () => {
+  it.each(['processing', 'stalled', 'failed', 'sent'])('refuses a %s publish row and writes nothing', (status) => {
     const db = seedEpisode();
-    db.prepare("INSERT INTO publishes (id, episode_id, platform, status, created_at_ms) VALUES ('p', 'ep-1', 'tiktok', 'processing', 1)").run();
+    db.prepare(
+      'INSERT INTO publishes (id, episode_id, platform, status, created_at_ms) VALUES (?, ?, ?, ?, 1)',
+    ).run('p', 'ep-1', 'tiktok', status);
     const result = attachRender(db, {
       episodeId: 'ep-1',
       filePath: 'out/ep-1.mp4',
@@ -81,6 +83,62 @@ describe('attachRender', () => {
     });
     expect(result).toEqual({kind: 'already-sent'});
     expect(db.prepare('SELECT COUNT(*) AS count FROM renders').get()).toEqual({count: 0});
+  });
+
+  it('refuses a youtube publish row the same way', () => {
+    const db = seedEpisode();
+    db.prepare(
+      "INSERT INTO publishes (id, episode_id, platform, status, created_at_ms) VALUES ('p', 'ep-1', 'youtube', 'sent', 1)",
+    ).run();
+    const result = attachRender(db, {
+      episodeId: 'ep-1',
+      filePath: 'out/ep-1.mp4',
+      durationSeconds: 15,
+      frameCount: 450,
+      nowMs: 5,
+      newId: () => 'render-1',
+    });
+    expect(result).toEqual({kind: 'already-sent'});
+    expect(db.prepare('SELECT COUNT(*) AS count FROM renders').get()).toEqual({count: 0});
+  });
+
+  it('records a render on a skipped night and leaves it skipped', () => {
+    const db = seedEpisode();
+    db.prepare("UPDATE episodes SET status = 'skipped' WHERE id = 'ep-1'").run();
+
+    const result = attachRender(db, {
+      episodeId: 'ep-1',
+      filePath: 'out/ep-1.mp4',
+      durationSeconds: 15,
+      frameCount: 450,
+      nowMs: 5,
+      newId: () => 'render-1',
+    });
+
+    expect(result).toEqual({kind: 'attached', renderId: 'render-1'});
+    const episode = getPlan(db, '2026-10-26');
+    expect(episode.kind === 'found' && episode.plan.episodes[0]).toMatchObject({
+      status: 'skipped',
+      renderPath: 'out/ep-1.mp4',
+    });
+  });
+
+  it('puts an approved night back to ready so the new video is approved again', () => {
+    const db = seedEpisode();
+    db.prepare("UPDATE episodes SET status = 'approved' WHERE id = 'ep-1'").run();
+
+    const result = attachRender(db, {
+      episodeId: 'ep-1',
+      filePath: 'out/ep-1.mp4',
+      durationSeconds: 15,
+      frameCount: 450,
+      nowMs: 5,
+      newId: () => 'render-1',
+    });
+
+    expect(result).toEqual({kind: 'attached', renderId: 'render-1'});
+    const episode = getPlan(db, '2026-10-26');
+    expect(episode.kind === 'found' && episode.plan.episodes[0]?.status).toBe('ready');
   });
 
   it('names an unknown episode and writes nothing', () => {
