@@ -26,23 +26,74 @@ function padTwo(value: number): string {
   return String(value).padStart(2, '0');
 }
 
-/** Formats epoch milliseconds as an ISO date-time with the Europe/Ljubljana offset, to the second. */
-export function formatLjubljanaIso(epochMs: number): string {
+type WallClock = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  wholeSecondMs: number;
+};
+
+function readWallClock(epochMs: number): WallClock {
   const wholeSecondMs = Math.floor(epochMs / MS_PER_SECOND) * MS_PER_SECOND;
   const parts = wallClockFormat.formatToParts(new Date(wholeSecondMs));
-  const year = readPart(parts, 'year');
-  const month = readPart(parts, 'month');
-  const day = readPart(parts, 'day');
-  const hour = readPart(parts, 'hour');
-  const minute = readPart(parts, 'minute');
-  const second = readPart(parts, 'second');
+  return {
+    year: readPart(parts, 'year'),
+    month: readPart(parts, 'month'),
+    day: readPart(parts, 'day'),
+    hour: readPart(parts, 'hour'),
+    minute: readPart(parts, 'minute'),
+    second: readPart(parts, 'second'),
+    wholeSecondMs,
+  };
+}
 
-  const wallClockAsUtcMs = Date.UTC(year, month - 1, day, hour, minute, second);
-  const offsetMinutes = Math.round((wallClockAsUtcMs - wholeSecondMs) / MS_PER_MINUTE);
+function offsetMinutesAt(epochMs: number): number {
+  const clock = readWallClock(epochMs);
+  const wallClockAsUtcMs = Date.UTC(clock.year, clock.month - 1, clock.day, clock.hour, clock.minute, clock.second);
+  return Math.round((wallClockAsUtcMs - clock.wholeSecondMs) / MS_PER_MINUTE);
+}
+
+function formatOffset(offsetMinutes: number): string {
   const sign = offsetMinutes < 0 ? '-' : '+';
   const absoluteMinutes = Math.abs(offsetMinutes);
-  const offset = `${sign}${padTwo(Math.floor(absoluteMinutes / 60))}:${padTwo(absoluteMinutes % 60)}`;
-  return `${year}-${padTwo(month)}-${padTwo(day)}T${padTwo(hour)}:${padTwo(minute)}:${padTwo(second)}${offset}`;
+  return `${sign}${padTwo(Math.floor(absoluteMinutes / 60))}:${padTwo(absoluteMinutes % 60)}`;
+}
+
+/** Formats epoch milliseconds as an ISO date-time with the Europe/Ljubljana offset, to the second. */
+export function formatLjubljanaIso(epochMs: number): string {
+  const clock = readWallClock(epochMs);
+  const offset = formatOffset(offsetMinutesAt(epochMs));
+  const date = `${clock.year}-${padTwo(clock.month)}-${padTwo(clock.day)}`;
+  const time = `${padTwo(clock.hour)}:${padTwo(clock.minute)}:${padTwo(clock.second)}`;
+  return `${date}T${time}${offset}`;
+}
+
+/**
+ * Epoch milliseconds of local midnight on the Europe/Ljubljana day that contains epochMs.
+ * Midnight exists on both DST change days: the clock moves at 02:00, not at 00:00.
+ */
+export function ljubljanaDayStartMs(epochMs: number): number {
+  const clock = readWallClock(epochMs);
+  const date = `${clock.year}-${padTwo(clock.month)}-${padTwo(clock.day)}`;
+  const utcMidnightMs = Date.UTC(clock.year, clock.month - 1, clock.day);
+  let startMs = utcMidnightMs;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    startMs = utcMidnightMs - offsetMinutesAt(startMs) * MS_PER_MINUTE;
+  }
+  const formatted = formatLjubljanaIso(startMs);
+  if (!formatted.startsWith(`${date}T00:00:00`)) {
+    throw new Error(`ljubljana-day-start: ${startMs} formatted as ${formatted}, want ${date}T00:00:00`);
+  }
+  return startMs;
+}
+
+/** Epoch milliseconds of local midnight on the next Europe/Ljubljana day. A DST day is 23 or 25 hours. */
+export function nextLjubljanaDayStartMs(epochMs: number): number {
+  const dayStartMs = ljubljanaDayStartMs(epochMs);
+  return ljubljanaDayStartMs(dayStartMs + 26 * 60 * MS_PER_MINUTE);
 }
 
 /** Parses an ISO date-time that carries an offset or Z. Returns undefined for anything else. */
