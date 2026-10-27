@@ -7,6 +7,7 @@ The plan is in `docs/project-guidelines.md`. It is cut to a Grok kill-gate, one 
 - `npm run render -- <slug>` renders a 15 s 9:16 video into `out/`.
 - A caption JSON sits next to each video: caption draft, hashtags, `aiGenerated: true`.
 - Upload is manual. The human taps publish.
+- `TrackReel` (default `--format reel`) replaces the TrackCard look for Reels and TikTok: full-bleed Grok clips (intro, then loop), one wordmark, bars that follow the audio. `--format card` keeps the old card.
 
 ## Phase 1a: Grok CLI asset generation (cycle 1 kill-gate, Scene only if it passes)
 - Run Grok headless: `grok agent` or `grok -p`, with `--max-turns 25` or more.
