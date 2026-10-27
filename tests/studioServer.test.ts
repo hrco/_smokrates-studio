@@ -135,6 +135,22 @@ describe('health and plan routes', () => {
     expect(JSON.parse(reply.body)).toEqual({isUp: true, schemaVersion: 2, isWorkerBusy: false});
   });
 
+  it('health.get is busy for a running render or asset, and idle while only a send is running', async () => {
+    sandbox.db
+      .prepare("INSERT INTO jobs (id, kind, status, created_at_ms, updated_at_ms) VALUES ('job-1', 'send', 'running', 1, 1)")
+      .run();
+    expect(JSON.parse((await send({path: '/api/health'})).body).isWorkerBusy).toBe(false);
+
+    sandbox.db.prepare("UPDATE jobs SET kind = 'asset', status = 'running' WHERE id = 'job-1'").run();
+    expect(JSON.parse((await send({path: '/api/health'})).body).isWorkerBusy).toBe(true);
+
+    sandbox.db.prepare("UPDATE jobs SET kind = 'render', status = 'running' WHERE id = 'job-1'").run();
+    expect(JSON.parse((await send({path: '/api/health'})).body).isWorkerBusy).toBe(true);
+
+    sandbox.db.prepare("UPDATE jobs SET status = 'succeeded' WHERE id = 'job-1'").run();
+    expect(JSON.parse((await send({path: '/api/health'})).body).isWorkerBusy).toBe(false);
+  });
+
   it('plan.import writes the week, then refuses a second import over work in progress', async () => {
     await importWeek();
     addRender('ep-1');
