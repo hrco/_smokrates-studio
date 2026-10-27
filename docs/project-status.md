@@ -24,7 +24,6 @@ Ordered, cycle 1. Each item is one slice and one pull request.
 
 Open follow-ups from the review:
 
-- The tiktok-auth error paths call process.exit from the handler. They can leave the server up. Close the server first.
 - The VPS host must come from the environment. `scripts/deploy-site.sh` now requires VPS_HOST.
 
 ## Blocked
