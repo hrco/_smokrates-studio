@@ -8,7 +8,13 @@ import {
   type TikTokResult,
 } from './types';
 
-export const TIKTOK_SCOPES = ['video.upload'] as const;
+const DEFAULT_SCOPES = 'video.upload';
+
+/** Scopes from TIKTOK_SCOPES (comma list); defaults to video.upload. */
+export function readScopes(env: Record<string, string | undefined>): string[] {
+  const scopes = (env.TIKTOK_SCOPES ?? '').split(',').map((scope) => scope.trim()).filter(Boolean);
+  return scopes.length > 0 ? scopes : [DEFAULT_SCOPES];
+}
 
 const AUTHORIZE_URL = 'https://www.tiktok.com/v2/auth/authorize/';
 const TOKEN_URL = 'https://open.tiktokapis.com/v2/oauth/token/';
@@ -46,7 +52,7 @@ export type RefreshTokenInput = {
 export function buildAuthorizeUrl(input: AuthorizeUrlInput): string {
   const url = new URL(AUTHORIZE_URL);
   url.searchParams.set('client_key', input.clientKey);
-  url.searchParams.set('scope', TIKTOK_SCOPES.join(','));
+  url.searchParams.set('scope', readScopes(process.env).join(','));
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('redirect_uri', input.redirectUri);
   url.searchParams.set('state', input.state);

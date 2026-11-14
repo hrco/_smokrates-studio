@@ -10,7 +10,7 @@ import {
 
 const INIT_URL = 'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/';
 const STATUS_URL = 'https://open.tiktokapis.com/v2/post/publish/status/fetch/';
-const MAX_SINGLE_CHUNK_BYTES = 64 * 1024 * 1024;
+export const MAX_SINGLE_CHUNK_BYTES = 64 * 1024 * 1024;
 const UPLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 
 export type PublishStatus =
@@ -34,9 +34,9 @@ function isPublishStatus(value: unknown): value is PublishStatus {
   return typeof value === 'string' && PUBLISH_STATUSES.includes(value);
 }
 
-type ApiErrorFields = {code: string; message: string; logId: string};
+export type ApiErrorFields = {code: string; message: string; logId: string};
 
-function readApiError(body: Record<string, unknown>): ApiErrorFields | undefined {
+export function readApiError(body: Record<string, unknown>): ApiErrorFields | undefined {
   const {error} = body;
   if (!isRecord(error) || !isNonEmptyString(error.code)) return undefined;
   return {
@@ -46,7 +46,7 @@ function readApiError(body: Record<string, unknown>): ApiErrorFields | undefined
   };
 }
 
-function describeApiError(apiError: ApiErrorFields): string {
+export function describeApiError(apiError: ApiErrorFields): string {
   return `${apiError.message} (log_id ${apiError.logId})`;
 }
 
@@ -76,7 +76,7 @@ async function initInboxUpload(accessToken: string, videoSize: number, fetchFn: 
   return {ok: true, value: {publishId: data.publish_id, uploadUrl: data.upload_url}};
 }
 
-async function putVideoBytes(uploadUrl: string, videoBytes: Uint8Array<ArrayBuffer>, fetchFn: FetchFn): Promise<TikTokResult<null>> {
+export async function putVideoBytes(uploadUrl: string, videoBytes: Uint8Array<ArrayBuffer>, fetchFn: FetchFn): Promise<TikTokResult<null>> {
   const operation = 'put-video-bytes';
   const size = videoBytes.byteLength;
   const response = await fetchFn(uploadUrl, {
