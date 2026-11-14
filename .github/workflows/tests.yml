@@ -1,0 +1,16 @@
+name: Tests
+on:
+  pull_request:
+jobs:
+  tests:
+    permissions:
+      contents: read
+    uses: DNP42/.github/.github/workflows/tests.yml@main
+    with:
+      gate: bash .claude/gate.sh
+      node-version: '22'
+      app-id: ${{ vars.DNPCLAUDE_APP_ID || '5756777' }}
+      agent-log-issue: ${{ vars.AGENT_LOG_ISSUE || '' }}
+    secrets:
+      DNPCLAUDE_PRIVATE_KEY: ${{ secrets.DNPCLAUDE_PRIVATE_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
