@@ -6,7 +6,7 @@ The studio uploads a rendered video to your TikTok inbox as a draft. It never po
 1. Open developers.tiktok.com and create an app.
 2. Set the platform to **Desktop**.
 3. Add the products **Login Kit** and **Content Posting API**.
-4. Enable the scope `video.upload`.
+4. Enable the scope `video.upload`. For `npm run tiktok:post` (direct post) also enable `video.publish`.
 5. Register this redirect URI exactly: `http://127.0.0.1:8723/callback/`
 6. If the app is in sandbox, add the Smokrates TikTok account as a sandbox target user.
 
@@ -14,7 +14,8 @@ The studio uploads a rendered video to your TikTok inbox as a draft. It never po
 1. Copy the client key and client secret into `.env`:
    - `TIKTOK_CLIENT_KEY`
    - `TIKTOK_CLIENT_SECRET`
-2. Leave `TIKTOK_REDIRECT_URI` at its default unless you registered another one.
+2. Scopes come from `TIKTOK_SCOPES` (comma list, default `video.upload`). For direct post set `TIKTOK_SCOPES=video.upload,video.publish` and run `npm run tiktok:auth` again.
+3. Leave `TIKTOK_REDIRECT_URI` at its default unless you registered another one.
 
 ## Authorize once
 1. Run `npm run tiktok:auth`.
@@ -59,3 +60,9 @@ TikTok needs a website, terms and privacy URL on a domain you can verify. The st
 - A sandbox target account that is set to **private** received the draft: status `SEND_TO_USER_INBOX` within one poll.
 - The public Smokrates account stayed in `PROCESSING_UPLOAD` on two uploads after a 201 PUT. Use a private test account for sandbox tests. Smokrates gets drafts after TikTok's app review.
 - Each pending draft uses one of 5 pending shares per 24 hours.
+
+## Direct post (private test)
+1. Set `TIKTOK_SCOPES=video.upload,video.publish` and authorize again.
+2. Run `npm run tiktok:post -- out/<file>.mp4 --caption "text"`.
+3. Privacy defaults to `SELF_ONLY`. Any other value needs `--privacy <LEVEL>` and must be in the account's `privacy_level_options`; the command refuses otherwise.
+4. Unaudited apps can only post privately. The post is marked AI-generated.
